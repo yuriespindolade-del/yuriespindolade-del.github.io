@@ -5,32 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema Financeiro Commit JR - Compartilhado</title>
     
+    <!-- Tailwind CSS (Estilo) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <!-- 🎨 CONFIGURAÇÃO DE CORES PERSONALIZADAS TAILWIND -->
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        'primary-dark': '#0B375B',       // Azul Escuro (Marca)
-                        'primary-light': '#1A82D9',      // Azul Claro (Destaque)
-                        'accent-yellow': '#FAC835',      // Amarelo (Acento)
+                        'primary-dark': '#0B375B',       // Azul Escuro (Principal)
+                        'primary-light': '#1A82D9',      // Azul Claro (Destaque/Hover)
+                        'accent-yellow': '#FAC835',      // Amarelo (Acento neutro/Total)
                     }
                 }
             }
         }
     </script>
+    <!-- 🎨 FIM CONFIGURAÇÃO TAILWIND -->
+    
+    <!-- React e ReactDOM (Motor da Aplicação) -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
+    <!-- Babel (Para entender o código React no navegador) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
+    <!-- Ícones Lucide -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
+    <!-- 🚀 SCRIPTS E CONFIGURAÇÃO DO FIREBASE 🚀 -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
 
+    <!-- Configuração da conexão com o SEU projeto -->
     <script>
         const firebaseConfig = {
             apiKey: "AIzaSyCasLIhPZ-eu_wisn0fNzNVEymGUouJaS0",
@@ -45,16 +54,16 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
     </script>
+    <!-- 🚀 FIM FIREBASE CONFIG 🚀 -->
+    
     <style>
-        /* Personalizações extras de CSS */
+        /* Personalizações extras */
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
-        /* MUDANÇA DE PLANO DE FUNDO PARA A COR DA MARCA */
-        body { background-color: #0B375B; } 
-        
+        /* NOVO: Plano de Fundo alterado para cinza claro (f5f7fa) */
+        body { background-color: #f5f7fa; } 
         .chart-bar { transition: height 0.5s ease-out, background-color 0.3s; }
     </style>
 </head>
@@ -63,6 +72,10 @@
 
     <script type="text/babel">
         const Icon = ({ name, size = 20, className = "" }) => <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
+        
+        // --- LOGO EXTERNO (GitHub) ---
+        // A string Base64 foi removida. Usamos o caminho relativo fornecido.
+        const LOGO_URL = "./araralogo.png"; 
 
         const { useState, useEffect, useMemo, useCallback } = React;
         
@@ -85,6 +98,7 @@
                 recebimentoStatus: newRecebimentoStatus,
             }).catch(error => {
                 console.error("Erro ao salvar no Firebase:", error);
+                // Não usamos alert(), mas é bom registrar o erro
             });
         };
 
@@ -95,10 +109,11 @@
 
             const handleSave = (e) => {
                 e.preventDefault();
+                // Limpa o ID para ser seguro para o Firestore
                 const cleanId = newId.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''); 
                 if (cleanId) {
                     setSharedAccessId(cleanId);
-                    localStorage.setItem('minhas_financas_shared_id', cleanId);
+                    localStorage.setItem('minhas_financas_shared_id', cleanId); // Salva no local storage
                 } else {
                     setNewId(sharedAccessId);
                 }
@@ -130,6 +145,8 @@
                 </div>
             );
         };
+        // --- FIM SharedIdInput ---
+
 
         // --- COMPONENTE: AuthScreen (Tela de Login/Cadastro) ---
         const AuthScreen = ({}) => {
@@ -166,11 +183,21 @@
             };
 
             return (
-                <div className="min-h-screen flex items-center justify-center p-4">
+                <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-primary-dark/20">
                         <div className="p-6 bg-primary-dark text-white flex flex-col items-center">
-                            {/* NOME ATUALIZADO NA TELA DE LOGIN */}
-                            <h1 className="text-2xl font-bold text-center">Sistema Financeiro <span className="text-accent-yellow">Commit JR</span></h1>
+                            {/* NOVO LOGO MAIOR NA TELA DE LOGIN */}
+                            <div className="w-16 h-16 mb-2">
+                                <img 
+                                    src={LOGO_URL} 
+                                    alt="Logo Commit JR" 
+                                    className="w-full h-full object-contain"
+                                    onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/64x64/0B375B/FFFFFF?text=JR"; }}
+                                />
+                            </div>
+                            {/* FIM NOVO LOGO */}
+
+                            <h1 className="text-3xl font-bold">Sistema Financeiro <span className="text-accent-yellow">Commit JR</span></h1>
                             <p className="mt-1 text-sm opacity-80">Acesso Compartilhado</p>
                         </div>
                         <form onSubmit={handleAuth} className="p-8 space-y-5">
@@ -222,11 +249,12 @@
             );
         };
 
-        // --- COMPONENTE: PlanilhaView ---
+        // --- COMPONENTE: PlanilhaView (Nova Tela) ---
         const PlanilhaView = ({ movimentacoes, excluirDivida, toggleStatus, isDataLoading }) => {
             
+            // 1. Calcular Saldo Acumulado Mês a Mês para o Gráfico
             const chartData = useMemo(() => {
-                if(isDataLoading) return { chartArray: [], maxAbsValue: 0 };
+                if(isDataLoading) return { chartArray: [], maxAbsValue: 0 }; // Evita cálculo desnecessário
                 
                 const today = new Date();
                 const currentMonthIndex = today.getMonth() + 1;
@@ -298,8 +326,10 @@
                 
             }, [movimentacoes, isDataLoading]);
             
+            // 2. Tabela de Movimentações
             const tableItems = movimentacoes.allMovimentacoes.slice().reverse();
 
+            // Normalização para o gráfico
             const maxChartHeight = 200;
             const normalizedChartData = chartData.chartArray.map(data => ({
                 ...data,
@@ -311,7 +341,7 @@
 
             if (isDataLoading) {
                 return (
-                    <div className="text-center py-20 rounded-xl bg-white">
+                    <div className="text-center py-20">
                         <Icon name="loader-2" size={48} className="text-primary-dark animate-spin mx-auto mb-4" />
                         <p className="text-gray-600">Carregando dados da planilha...</p>
                     </div>
@@ -320,7 +350,8 @@
             
             return (
                 <div className="space-y-6">
-                    <div className={`p-6 rounded-xl border shadow-lg transition-colors bg-white ${movimentacoes.totalRealizado >= 0 ? 'border-green-200' : 'border-red-200'}`}>
+                    {/* Saldo Atual (Caixa) */}
+                    <div className={`p-6 rounded-xl border shadow-lg transition-colors ${movimentacoes.totalRealizado >= 0 ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'}`}>
                         <span className="text-xl font-medium uppercase text-gray-700">Caixa Atual (Saldo Realizado)</span>
                         <div className="text-5xl font-extrabold mt-2" style={{ color: movimentacoes.totalRealizado >= 0 ? '#10B981' : '#EF4444' }}>
                             R$ {movimentacoes.totalRealizado.toFixed(2)}
@@ -328,9 +359,12 @@
                         <p className="text-sm text-gray-600 mt-1">Soma de todas as Receitas Recebidas menos todas as Despesas Pagas até hoje.</p>
                     </div>
 
+                    {/* Gráfico de Saldo Acumulado */}
                     <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
                         <h2 className="font-semibold text-gray-700 text-lg mb-4">Gráfico de Saldo Acumulado (Últimos Meses)</h2>
                         <div className="flex justify-start items-end gap-2 p-2 overflow-x-auto min-h-[250px] relative">
+                            
+                            {/* Linha de Zero */}
                             <div className="absolute left-0 right-0 border-t border-gray-300 pointer-events-none" style={{ top: `${maxChartHeight / 2}px` }}></div>
                             <span className="absolute left-0 text-xs text-gray-500" style={{ top: `${maxChartHeight / 2 - 10}px` }}>R$ 0</span>
 
@@ -340,17 +374,25 @@
                                 normalizedChartData.map((data, index) => (
                                     <div key={index} className="flex flex-col items-center w-12 flex-shrink-0">
                                         <div className="relative w-full flex flex-col items-center">
-                                            <div className={`w-full ${data.isPositive ? 'order-2' : 'order-1'} bg-gray-50`} style={{ height: `${data.isPositive ? maxChartHeight / 2 : maxChartHeight - data.normalizedHeight - (maxChartHeight / 2)}px` }}></div>
+                                            {/* Espaço abaixo da linha zero (negativo) ou acima (positivo) */}
+                                            <div className={`w-full ${data.isPositive ? 'order-2' : 'order-1'} bg-gray-100`} style={{ height: `${data.isPositive ? maxChartHeight / 2 : maxChartHeight - data.normalizedHeight - (maxChartHeight / 2)}px` }}></div>
+                                            
+                                            {/* Barra Real */}
                                             <div 
                                                 className={`chart-bar w-full rounded-t-md cursor-pointer group relative hover:opacity-80 ${data.isPositive ? 'bg-green-500 order-1' : 'bg-red-500 order-2'}`} 
                                                 style={{ height: `${data.normalizedHeight / 2}px` }}
                                                 title={`Mês: ${getMonthName(data.month)}/${data.year}\nSaldo Acumulado: R$ ${data.cumulativeBalance.toFixed(2)}`}>
+                                                
+                                                {/* Tooltip */}
                                                 <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 p-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                                                     R$ {data.cumulativeBalance.toFixed(2)}
                                                 </span>
                                             </div>
-                                            <div className={`w-full ${data.isPositive ? 'order-1' : 'order-2'} bg-gray-50`} style={{ height: `${data.isPositive ? maxChartHeight - data.normalizedHeight - (maxChartHeight / 2) : maxChartHeight / 2}px` }}></div>
+
+                                            {/* Espaço acima da linha zero (positivo) ou abaixo (negativo) */}
+                                            <div className={`w-full ${data.isPositive ? 'order-1' : 'order-2'} bg-gray-100`} style={{ height: `${data.isPositive ? maxChartHeight - data.normalizedHeight - (maxChartHeight / 2) : maxChartHeight / 2}px` }}></div>
                                         </div>
+                                        
                                         <span className="text-[10px] text-gray-600 mt-1">{getMonthName(data.month)}/{String(data.year).slice(2)}</span>
                                     </div>
                                 ))
@@ -358,6 +400,8 @@
                         </div>
                     </div>
 
+
+                    {/* Tabela Detalhada */}
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                         <div className="bg-gray-50 px-4 py-3 border-b border-gray-200"><h2 className="font-semibold text-gray-700">Tabela de Movimentações (Histórico)</h2></div>
                         <div className="overflow-x-auto">
@@ -424,15 +468,19 @@
                             </table>
                         </div>
                     </div>
+
                 </div>
             );
         };
+        // --- FIM COMPONENTE: PlanilhaView ---
 
         function App() {
+            // --- Estado de Autenticação e Dados ---
             const [user, setUser] = useState(null);
             const [isAuthReady, setIsAuthReady] = useState(false);
-            const [isDataLoading, setIsDataLoading] = useState(true);
+            const [isDataLoading, setIsDataLoading] = useState(true); // NOVO: Estado de carregamento dos dados
             
+            // ID de acesso compartilhado: Puxa do localStorage ou usa o padrão
             const [sharedAccessId, setSharedAccessId] = useState(
                 localStorage.getItem('minhas_financas_shared_id') || 'grupo_principal'
             ); 
@@ -452,10 +500,13 @@
                 tipo: 'divida'
             });
 
+            // 1. Definição Dinâmica da Referência do Firestore
             const USER_DOC_REF = user 
                 ? db.collection("shared_finances").doc(sharedAccessId) 
                 : null;
 
+
+            // 🚀 EFEITO 1: Listener de Autenticação (Checa se o usuário está logado)
             useEffect(() => {
                 const unsubscribeAuth = auth.onAuthStateChanged((currentUser) => {
                     setUser(currentUser);
@@ -464,18 +515,21 @@
                 return () => unsubscribeAuth();
             }, []);
 
+            // 🚀 EFEITO 2: Listener do Firestore (Carrega os dados)
             useEffect(() => {
                 if (!user || !USER_DOC_REF) {
+                    // Limpa os dados se deslogado ou se a referência não estiver pronta
                     setDividas([]);
                     setRecebimentos([]);
                     setPagamentos({});
                     setRecebimentoStatus({});
-                    setIsDataLoading(false); 
+                    setIsDataLoading(false); // Define como não carregando após limpar os dados
                     return; 
                 }
 
-                setIsDataLoading(true);
+                setIsDataLoading(true); // Começa a carregar
                 
+                // Carrega os dados do documento específico deste grupo
                 const unsubscribeData = USER_DOC_REF.onSnapshot(doc => {
                     if (doc.exists) {
                         const data = doc.data();
@@ -484,22 +538,28 @@
                         setPagamentos(data.pagamentos || {});
                         setRecebimentoStatus(data.recebimentoStatus || {});
                     } else {
+                        // Se for o primeiro acesso a este ID de grupo, cria o documento inicial
                         saveDataToFirebase(USER_DOC_REF, [], [], {}, {});
                     }
                     lucide.createIcons();
-                    setIsDataLoading(false);
+                    setIsDataLoading(false); // Termina de carregar com sucesso
                 }, (error) => {
                     console.error("Erro ao carregar dados do Firebase:", error);
-                    setIsDataLoading(false);
+                    // Aqui você pode adicionar um feedback visual de erro crítico, se necessário
+                    setIsDataLoading(false); // Termina de carregar com erro
                 });
                 
                 return () => unsubscribeData();
-            }, [user, sharedAccessId]);
+            }, [user, sharedAccessId]); // Depende do user E do ID de Acesso Compartilhado
             
             useEffect(() => {
                 lucide.createIcons();
             }, [dividas, recebimentos, viewDate, showModal, view]);
 
+
+            // --- Lógica de Negócios (Movimentações e Saldo) ---
+            
+            // Funções de Ação (Adaptadas para usar USER_DOC_REF)
             const changeMonth = useCallback((offset) => {
                 const newDate = new Date(viewDate);
                 newDate.setMonth(newDate.getMonth() + offset);
@@ -578,6 +638,8 @@
                 }
             }, [dividas, recebimentos, pagamentos, recebimentoStatus, USER_DOC_REF]);
             
+            // --- CÓDIGOS DE CÁLCULO ---
+
             const movimentacoesDoMes = useMemo(() => {
                 if (isDataLoading) return { itens: [], totalDespesasPagas: 0, totalDespesasPendentes: 0, totalReceitasPagas: 0, totalReceitasPendentes: 0, saldo: 0 };
                 
@@ -667,8 +729,10 @@
 
             }, [dividas, recebimentos, pagamentos, recebimentoStatus, isDataLoading]);
 
+
             const { itens, totalDespesasPagas, totalDespesasPendentes, totalReceitasPagas, totalReceitasPendentes, saldo } = movimentacoesDoMes;
 
+            // --- Renderização do Calendário ---
             const renderCalendarDays = () => {
                 const year = viewDate.getFullYear();
                 const month = viewDate.getMonth();
@@ -719,16 +783,20 @@
                 return days;
             };
 
+            // --- Componente CalendarioView (Corpo da Página) ---
             const CalendarioView = () => (
                 <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+                    {/* Resumo ATUALIZADO (Saldo, Receitas, Despesas) */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className={`p-4 rounded-xl border shadow-sm bg-white ${saldo >= 0 ? 'border-green-100' : 'border-red-100'}`}>
+                        {/* Card 1: Saldo Líquido do Mês */}
+                        <div className={`p-4 rounded-xl border shadow-sm ${saldo >= 0 ? 'bg-green-50/50 border-green-100' : 'bg-red-50/50 border-red-100'}`}>
                             <span className="text-gray-500 text-xs font-medium uppercase">Saldo do Mês</span>
                             <div className="text-2xl font-bold mt-1" style={{ color: saldo >= 0 ? '#10B981' : '#EF4444' }}>
                                 R$ {saldo.toFixed(2)}
                             </div>
                         </div>
                         
+                        {/* Card 2: Total Receitas */}
                         <div className="bg-white p-4 rounded-xl border border-primary-light/40 shadow-sm">
                             <span className="text-primary-dark text-xs font-medium uppercase">Total Receitas</span>
                             <div className="text-2xl font-bold text-primary-dark mt-1">R$ {(totalReceitasPagas + totalReceitasPendentes).toFixed(2)}</div>
@@ -738,6 +806,7 @@
                             </div>
                         </div>
 
+                        {/* Card 3: Total Despesas */}
                         <div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm">
                             <span className="text-red-500 text-xs font-medium uppercase">Total Despesas</span>
                             <div className="text-2xl font-bold text-red-600 mt-1">R$ {(totalDespesasPagas + totalDespesasPendentes).toFixed(2)}</div>
@@ -749,6 +818,7 @@
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Calendário */}
                         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                             <div className="bg-gray-50 px-4 py-3 border-b border-gray-200"><h2 className="font-semibold text-gray-700 flex items-center gap-2"><Icon name="calendar" size={16}/> Visão Mensal</h2></div>
                             <div className="grid grid-cols-7 text-center bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 py-2">
@@ -757,6 +827,7 @@
                             <div className="grid grid-cols-7 bg-gray-100 gap-px border-b border-gray-200">{renderCalendarDays()}</div>
                         </div>
 
+                        {/* Lista de Movimentações do Mês */}
                         <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col h-[500px]">
                             <div className="bg-gray-50 px-4 py-3 border-b border-gray-200"><h2 className="font-semibold text-gray-700">Movimentações do Mês</h2></div>
                             <div className="flex-1 overflow-y-auto p-2 space-y-2">
@@ -800,11 +871,13 @@
                 </main>
             );
             
+            // --- RENDERIZAÇÃO CONDICIONAL ---
+            
             if (!isAuthReady) {
                 return (
-                    <div className="min-h-screen flex flex-col items-center justify-center p-4">
-                        <Icon name="loader-2" size={48} className="text-white animate-spin mb-4" />
-                        <p className="text-white">Carregando autenticação...</p>
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
+                        <Icon name="loader-2" size={48} className="text-primary-dark animate-spin mb-4" />
+                        <p className="text-gray-600">Carregando autenticação...</p>
                     </div>
                 );
             }
@@ -813,31 +886,41 @@
                 return <AuthScreen />;
             }
 
+
+            // Renderização da Tela de Carregamento de Dados (Após Login)
             if (isDataLoading) {
                  return (
-                    <div className="min-h-screen flex flex-col items-center justify-center p-4">
-                        <Icon name="loader-2" size={48} className="text-white animate-spin mb-4" />
-                        <p className="text-white">Carregando dados financeiros de {sharedAccessId}...</p>
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
+                        <Icon name="loader-2" size={48} className="text-primary-dark animate-spin mb-4" />
+                        <p className="text-gray-600">Carregando dados financeiros de {sharedAccessId}...</p>
                     </div>
                 );
             }
 
+
+            // --- Renderização Principal (Navbar e Roteamento) ---
             return (
                 <div className="min-h-screen pb-20">
+                    {/* Navbar */}
                     <nav className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
                         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
                             
-                            {/* 🎨 LOGO E NOME COMMIT JR ATUALIZADOS */}
+                            {/* 🎨 Logo e Nome */}
                             <div className="flex items-center gap-2">
-                                <div className="p-1 rounded-lg bg-primary-dark shadow-md h-10 w-10 flex items-center justify-center">
-                                    {/* NOVA LOGO SVG BRANCA (Commit Jr Papagaio) */}
-                                    <svg width="28" height="28" viewBox="0 0 147 183" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <path fill-rule="evenodd" clip-rule="evenodd" d="M73.1302 0C32.7411 0 0 32.9461 0 73.587C0 98.4446 12.2461 120.388 31.1066 134.129L46.054 108.075C37.8247 98.5925 32.7009 86.293 32.3431 72.8888H50.9506C51.5829 81.5942 55.103 89.4295 60.5688 95.6258L73.1322 116.359C76.798 115.348 80.3474 113.753 83.5954 111.677L103.421 73.587L135.794 0.567627C118.335 0.194391 97.4303 0 73.1302 0ZM92.6635 35.0707C100.559 35.0707 106.959 41.511 106.959 49.4563C106.959 57.4015 100.559 63.8418 92.6635 63.8418C84.7676 63.8418 78.3675 57.4015 78.3675 49.4563C78.3675 41.511 84.7676 35.0707 92.6635 35.0707ZM55.9904 35.0688C59.7768 35.0688 62.8462 38.1576 62.8462 41.9677C62.8462 45.7778 59.7768 48.8666 55.9904 48.8666C52.2039 48.8666 49.1346 45.7778 49.1346 41.9677C49.1346 38.1576 52.2039 35.0688 55.9904 35.0688ZM78.3666 49.4563H62.8462V63.6691C59.92 63.6691 57.5479 66.0561 57.5479 69.0005V76.9458H39.7356C36.8096 76.9458 34.4375 79.3328 34.4375 82.2771C34.4375 85.2216 36.8096 87.6085 39.7356 87.6085H62.8462V69.0005H78.3666C78.3666 72.0892 80.7387 74.5933 83.6647 74.5933H100.011C102.937 74.5933 105.309 72.0892 105.309 69.0005V49.4563H78.3666Z" fill="white"/>
-                                    </svg>
+                                <div className="p-2 rounded-lg bg-primary-dark shadow-md">
+                                    {/* NOVO LOGO MENOR NA NAVBAR */}
+                                    <img 
+                                        src={LOGO_URL} 
+                                        alt="Logo Commit JR" 
+                                        className="w-6 h-6 object-contain"
+                                        onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/24x24/0B375B/FFFFFF?text=JR"; }}
+                                    />
+                                    {/* FIM NOVO LOGO */}
                                 </div>
-                                <h1 className="font-bold text-xl tracking-tight hidden sm:block text-primary-dark">Sistema Financeiro <span className="font-extrabold">Commit JR</span></h1>
+                                <h1 className="font-bold text-xl tracking-tight hidden sm:block text-slate-800">Sistema Financeiro <span className="text-primary-dark">Commit JR</span></h1>
                             </div>
 
+                            {/* 🔄 Navegação Principal */}
                             <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1">
                                 <button 
                                     onClick={() => setView('calendario')} 
@@ -851,8 +934,10 @@
                                 </button>
                             </div>
                             
+                            {/* 🗓 Botões de Ação Específicos da View */}
                             <div className="flex items-center gap-4">
                                 
+                                {/* Configuração do ID de Acesso */}
                                 <SharedIdInput sharedAccessId={sharedAccessId} setSharedAccessId={setSharedAccessId} />
 
                                 {view === 'calendario' ? (
@@ -876,6 +961,7 @@
                         </div>
                     </nav>
 
+                    {/* Conteúdo Renderizado com Base no Estado 'view' */}
                     {view === 'calendario' && <CalendarioView />}
                     {view === 'planilha' && (
                         <main className="max-w-5xl mx-auto px-4 py-6">
@@ -888,6 +974,7 @@
                         </main>
                     )}
 
+                    {/* Modal (Adicionar Conta) */}
                     {showModal && (
                         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                             <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
