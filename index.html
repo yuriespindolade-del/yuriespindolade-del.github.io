@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minhas Finanças JR - Completo</title>
+    <title>Minhas Finanças JR - Compartilhado</title>
     
     <!-- Tailwind CSS (Estilo) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,8 +14,8 @@
             theme: {
                 extend: {
                     colors: {
-                        'primary-dark': '#0B375B',       // Azul Escuro (Principal)
-                        'primary-light': '#1A82D9',      // Azul Claro (Destaque/Hover)
+                        'primary-dark': '#1A82D9',       // Azul Escuro (Principal)
+                        'primary-light': '#0B375B',      // Azul Claro (Destaque/Hover)
                         'accent-yellow': '#FAC835',      // Amarelo (Acento neutro/Total)
                     }
                 }
@@ -37,7 +37,7 @@
     <!-- 🚀 SCRIPTS E CONFIGURAÇÃO DO FIREBASE 🚀 -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script> <!-- NOVO: AUTENTICAÇÃO -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
 
     <!-- Configuração da conexão com o SEU projeto -->
     <script>
@@ -52,9 +52,7 @@
         
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
-        const auth = firebase.auth(); // Inicializa o serviço de autenticação
-        
-        // A referência USER_DOC_REF será criada dinamicamente no React com o UID do usuário.
+        const auth = firebase.auth();
     </script>
     <!-- 🚀 FIM FIREBASE CONFIG 🚀 -->
     
@@ -85,7 +83,7 @@
             return date.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase();
         };
 
-        // Função para salvar dados no documento ESPECÍFICO do usuário
+        // Função para salvar dados no documento ESPECÍFICO (agora compartilhado)
         const saveDataToFirebase = (userRef, newDividas, newRecebimentos, newPagamentos, newRecebimentoStatus) => {
             if (!userRef) return;
             userRef.set({
@@ -97,6 +95,50 @@
                 console.error("Erro ao salvar no Firebase:", error);
             });
         };
+
+        // --- NOVO: Componente para Configurar o ID do Grupo Compartilhado ---
+        const SharedIdInput = ({ sharedAccessId, setSharedAccessId }) => {
+            const [newId, setNewId] = useState(sharedAccessId);
+            const [isEditing, setIsEditing] = useState(false);
+
+            const handleSave = (e) => {
+                e.preventDefault();
+                const cleanId = newId.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+                if (cleanId) {
+                    setSharedAccessId(cleanId);
+                } else {
+                    setNewId(sharedAccessId);
+                }
+                setIsEditing(false);
+            };
+
+            return (
+                <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                    <Icon name="users" size={16} className="text-gray-500"/>
+                    {!isEditing ? (
+                        <>
+                            <span className="text-xs font-medium text-gray-700 truncate">Grupo: <span className="text-primary-dark font-bold">{sharedAccessId}</span></span>
+                            <button onClick={() => setIsEditing(true)} className="text-gray-400 hover:text-primary-dark">
+                                <Icon name="pencil" size={14}/>
+                            </button>
+                        </>
+                    ) : (
+                        <form onSubmit={handleSave} className="flex gap-1">
+                            <input 
+                                type="text" 
+                                value={newId} 
+                                onChange={e => setNewId(e.target.value)}
+                                placeholder="ID do Grupo"
+                                className="px-1 py-0.5 text-xs border rounded w-32 focus:outline-none focus:border-primary-light"
+                            />
+                            <button type="submit" className="text-white bg-primary-dark hover:bg-primary-light px-2 py-0.5 rounded text-xs">Salvar</button>
+                        </form>
+                    )}
+                </div>
+            );
+        };
+        // --- FIM SharedIdInput ---
+
 
         // --- COMPONENTE: AuthScreen (Tela de Login/Cadastro) ---
         const AuthScreen = ({}) => {
@@ -118,7 +160,6 @@
                         await auth.createUserWithEmailAndPassword(email, password);
                     }
                 } catch (err) {
-                    // Mapeamento simples de erros para Português
                     let msg = "Ocorreu um erro de autenticação.";
                     if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
                         msg = "E-mail ou senha inválidos.";
@@ -172,7 +213,7 @@
                             <button 
                                 type="submit" 
                                 disabled={isLoading}
-                                className={`w-full px-4 py-3 rounded-lg text-white font-semibold transition-colors flex items-center justify-center gap-2 ${isLoading ? 'bg-primary-light/70 cursor-not-allowed' : 'bg-primary-dark hover:bg-primary-light'}`}>
+                                className={`w-full px-4 py-3 rounded-lg text-white font-semibold transition-colors flex items-center justify-center gap-2 ${isLoading ? 'bg-primary-dark/70 cursor-not-allowed' : 'bg-primary-dark hover:bg-primary-light'}`}>
                                 {isLoading && <Icon name="loader-2" size={16} className="animate-spin" />}
                                 {isLogin ? 'Entrar' : 'Cadastrar'}
                             </button>
@@ -188,8 +229,6 @@
                 </div>
             );
         };
-        // --- FIM COMPONENTE: AuthScreen ---
-
 
         // --- COMPONENTE: PlanilhaView (Nova Tela) ---
         const PlanilhaView = ({ movimentacoes, excluirDivida, toggleStatus }) => {
@@ -407,8 +446,12 @@
 
         function App() {
             // --- Estado de Autenticação e Dados ---
-            const [user, setUser] = useState(null); // O objeto de usuário do Firebase
-            const [isAuthReady, setIsAuthReady] = useState(false); // Estado para saber se o Firebase terminou de checar a autenticação
+            const [user, setUser] = useState(null);
+            const [isAuthReady, setIsAuthReady] = useState(false);
+            
+            // NOVO: ID de acesso compartilhado. Troque 'grupo_principal' pelo ID que você quer usar por padrão.
+            const [sharedAccessId, setSharedAccessId] = useState('grupo_principal'); 
+
             const [dividas, setDividas] = useState([]);
             const [recebimentos, setRecebimentos] = useState([]); 
             const [pagamentos, setPagamentos] = useState({});
@@ -424,9 +467,11 @@
                 tipo: 'divida'
             });
 
-            // 1. Definição Dinâmica da Referência do Firestore (Privada por Usuário)
-            // Se houver usuário, usa 'users/{uid}/finances'
-            const USER_DOC_REF = user ? db.collection("users").doc(user.uid) : null;
+            // 1. Definição Dinâmica da Referência do Firestore (AGORA COMPARTILHADA)
+            // Usa a coleção 'shared_finances' e o ID de acesso
+            const USER_DOC_REF = user 
+                ? db.collection("shared_finances").doc(sharedAccessId) 
+                : null;
 
 
             // 🚀 EFEITO 1: Listener de Autenticação (Checa se o usuário está logado)
@@ -438,10 +483,10 @@
                 return () => unsubscribeAuth();
             }, []);
 
-            // 🚀 EFEITO 2: Listener do Firestore (Carrega os dados SOMENTE se o usuário estiver logado)
+            // 🚀 EFEITO 2: Listener do Firestore (Carrega os dados SOMENTE se o usuário estiver logado E o sharedAccessId mudar)
             useEffect(() => {
                 if (!user || !USER_DOC_REF) {
-                    // Limpa os dados se deslogado
+                    // Limpa os dados se deslogado ou se a referência não estiver pronta
                     setDividas([]);
                     setRecebimentos([]);
                     setPagamentos({});
@@ -449,7 +494,7 @@
                     return; 
                 }
 
-                // Carrega os dados do documento específico deste usuário (user.uid)
+                // Carrega os dados do documento específico deste grupo
                 const unsubscribeData = USER_DOC_REF.onSnapshot(doc => {
                     if (doc.exists) {
                         const data = doc.data();
@@ -458,7 +503,7 @@
                         setPagamentos(data.pagamentos || {});
                         setRecebimentoStatus(data.recebimentoStatus || {});
                     } else {
-                        // Se for o primeiro login, cria o documento inicial
+                        // Se for o primeiro acesso a este ID de grupo, cria o documento inicial
                         saveDataToFirebase(USER_DOC_REF, [], [], {}, {});
                     }
                     lucide.createIcons();
@@ -467,7 +512,7 @@
                 });
                 
                 return () => unsubscribeData();
-            }, [user, USER_DOC_REF]);
+            }, [user, sharedAccessId]); // Depende do user E do ID de Acesso Compartilhado
             
             useEffect(() => {
                 lucide.createIcons();
@@ -476,7 +521,7 @@
 
             // --- Lógica de Negócios (Movimentações e Saldo) ---
             
-            // Funções de Ação (Adaptadas para passar USER_DOC_REF)
+            // Funções de Ação (Adaptadas para usar USER_DOC_REF)
             const changeMonth = useCallback((offset) => {
                 const newDate = new Date(viewDate);
                 newDate.setMonth(newDate.getMonth() + offset);
@@ -555,13 +600,8 @@
                 }
             }, [dividas, recebimentos, pagamentos, recebimentoStatus, USER_DOC_REF]);
             
-            // --- Cálculo dos Dados ---
-            // O código de cálculo (movimentacoesDoMes e lifetimeMovimentacoes) permanece o mesmo,
-            // pois depende dos estados locais (dividas, recebimentos, etc.) que são populados pelo Firebase.
-            
-            // CÓDIGOS DE CÁLCULO REPETIDOS PARA O CONTEXTO (USO MEMO E USECALLBACK)
+            // --- CÓDIGOS DE CÁLCULO (Permanece o mesmo) ---
 
-            // 1. Cálculo do MÊS ATUAL (Usado no Calendário)
             const movimentacoesDoMes = useMemo(() => {
                 const mesAtual = viewDate.getMonth() + 1;
                 const anoAtual = viewDate.getFullYear();
@@ -601,7 +641,6 @@
             }, [dividas, recebimentos, pagamentos, recebimentoStatus, viewDate]);
 
 
-            // 2. Cálculo do SALDO TOTAL E HISTÓRICO (Usado na Planilha)
             const lifetimeMovimentacoes = useMemo(() => {
                 const today = new Date();
                 const currentMonth = today.getMonth() + 1;
@@ -651,7 +690,7 @@
 
             const { itens, totalDespesasPagas, totalDespesasPendentes, totalReceitasPagas, totalReceitasPendentes, saldo } = movimentacoesDoMes;
 
-            // --- Renderização do Calendário (Manteve-se a lógica original) ---
+            // --- Renderização do Calendário ---
             const renderCalendarDays = () => {
                 const year = viewDate.getFullYear();
                 const month = viewDate.getMonth();
@@ -793,7 +832,6 @@
             // --- RENDERIZAÇÃO CONDICIONAL ---
             
             if (!isAuthReady) {
-                // Tela de carregamento enquanto o Firebase checa o status de login
                 return (
                     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
                         <Icon name="loader-2" size={48} className="text-primary-dark animate-spin mb-4" />
@@ -803,7 +841,6 @@
             }
             
             if (!user) {
-                // Tela de Login/Cadastro se o usuário não estiver logado
                 return <AuthScreen />;
             }
 
@@ -844,6 +881,10 @@
                             
                             {/* 🗓 Botões de Ação Específicos da View */}
                             <div className="flex items-center gap-4">
+                                
+                                {/* NOVO: Configuração do ID de Acesso */}
+                                <SharedIdInput sharedAccessId={sharedAccessId} setSharedAccessId={setSharedAccessId} />
+
                                 {view === 'calendario' ? (
                                     <div className="flex items-center gap-4 bg-gray-100 rounded-full p-1 pr-4 hidden md:flex">
                                         <button onClick={() => changeMonth(-1)} className="p-1.5 hover:bg-white rounded-full shadow-sm"><Icon name="chevron-left" className="text-gray-600"/></button>
