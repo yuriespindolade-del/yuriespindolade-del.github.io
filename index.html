@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minhas Finanças</title>
+    
+    <!-- Tailwind CSS (Estilo) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React e ReactDOM (Motor da Aplicação) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel (Para entender o código React no navegador) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Ícones Lucide -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        /* Personalizações extras */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        body { background-color: #f8fafc; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- Ícones (Componentes SVG manuais para garantir compatibilidade sem build) ---
+        const Icon = ({ name, size = 20, className = "" }) => <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
+
+        const { useState, useEffect, useMemo } = React;
+
+        function App() {
+            // --- Estado ---
+            const [dividas, setDividas] = useState([]);
+            const [pagamentos, setPagamentos] = useState({});
+            const [viewDate, setViewDate] = useState(new Date());
+            const [showModal, setShowModal] = useState(false);
+            const [newConta, setNewConta] = useState({
+                nome: '', valor: '', dia: '', parcelas: '1',
+                mesInicio: new Date().getMonth() + 1,
+                anoInicio: new Date().getFullYear()
+            });
+
+            // --- Carregar/Salvar Dados (LocalStorage) ---
+            useEffect(() => {
+                const dadosSalvos = localStorage.getItem('minhas_financas_v1');
+                if (dadosSalvos) {
+                    const parsed = JSON.parse(dadosSalvos);
+                    setDividas(parsed.dividas || []);
+                    setPagamentos(parsed.pagamentos || {});
+                }
+                lucide.createIcons();
+            }, []);
+
+            useEffect(() => {
+                if (dividas.length > 0 || Object.keys(pagamentos).length > 0) {
+                    localStorage.setItem('minhas_financas_v1', JSON.stringify({ dividas, pagamentos }));
+                }
+            }, [dividas, pagamentos]);
+
+            useEffect(() => {
+                lucide.createIcons();
+            }, [dividas, viewDate, showModal]); // Recriar ícones quando a tela mudar
+
+            // --- Lógica de Negócios (Igual ao App original) ---
+            const changeMonth = (offset) => {
+                const newDate = new Date(viewDate);
+                newDate.setMonth(newDate.getMonth() + offset);
+                setViewDate(newDate);
+            };
+
+            const dividasDoMes = useMemo(() => {
+                const mesAtual = viewDate.getMonth() + 1;
+                const anoAtual = viewDate.getFullYear();
+                
+                const lista = [];
+                let totalPendente = 0;
+                let totalPago = 0;
+
+                dividas.forEach(divida => {
+                    const mesesDiferenca = (anoAtual - divida.anoInicio) * 12 + (mesAtual - divida.mesInicio);
+
+                    if (mesesDiferenca >= 0 && mesesDiferenca < divida.parcelas) {
+                        const indiceParcela = mesesDiferenca;
+                        const chavePagamento = `${divida.id}_${indiceParcela}`;
+                        const estaPago = !!pagamentos[chavePagamento];
+
+                        if (estaPago) totalPago += Number(divida.valor);
+                        else totalPendente += Number(divida.valor);
+
+                        lista.push({ ...divida, parcelaAtual: indiceParcela + 1, estaPago, chavePagamento });
+                    }
+                });
+
+                return { itens: lista.sort((a, b) => a.dia - b.dia), totalPago, totalPendente };
+            }, [dividas, pagamentos, viewDate]);
+
+            const handleAddConta = (e) => {
+                e.preventDefault();
+                const nova = {
+                    id: Date.now().toString(), // ID único simples
+                    nome: newConta.nome,
+                    valor: parseFloat(newConta.valor),
+                    dia: parseInt(newConta.dia),
+                    parcelas: parseInt(newConta.parcelas),
+                    mesInicio: parseInt(newConta.mesInicio),
+                    anoInicio: parseInt(newConta.anoInicio),
+                };
+                setDividas([...dividas, nova]);
+                setShowModal(false);
+                setNewConta({ nome: '', valor: '', dia: '', parcelas: '1', mesInicio: new Date().getMonth() + 1, anoInicio: new Date().getFullYear() });
+            };
+
+            const togglePagamento = (chave) => {
+                setPagamentos(prev => {
+                    const novo = { ...prev };
+                    if (novo[chave]) delete novo[chave];
+                    else novo[chave] = true;
+                    return novo;
+                });
+            };
+
+            const excluirDivida = (id) => {
+                if(confirm("Deseja realmente excluir esta conta e todo o histórico dela?")) {
+                    setDividas(dividas.filter(d => d.id !== id));
+                    // Limpar pagamentos órfãos seria ideal, mas não crítico aqui
+                }
+            };
+
+            // --- Renderização ---
+            const renderCalendarDays = () => {
+                const year = viewDate.getFullYear();
+                const month = viewDate.getMonth();
+                const firstDay = new Date(year, month, 1).getDay();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const days = [];
+
+                for (let i = 0; i < firstDay; i++) {
+                    days.push(<div key={`empty-${i}`} className="h-24 bg-gray-50/50 border border-gray-100"></div>);
+                }
+
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const contasDoDia = dividasDoMes.itens.filter(i => i.dia === d);
+                    const isToday = new Date().getDate() === d && new Date().getMonth() === month && new Date().getFullYear() === year;
+
+                    days.push(
+                        <div key={d} className={`h-24 border border-gray-100 p-1 relative hover:bg-white transition-colors overflow-hidden group ${isToday ? 'bg-blue-50/50' : 'bg-white'}`}>
+                            <span className={`text-sm font-semibold w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-600 text-white' : 'text-gray-500'}`}>{d}</span>
+                            <div className="mt-1 flex flex-col gap-1 overflow-y-auto max-h-[calc(100%-24px)] custom-scrollbar">
+                                {contasDoDia.map((conta) => (
+                                    <div key={conta.id} 
+                                         onClick={() => togglePagamento(conta.chavePagamento)}
+                                         className={`text-[10px] px-1 py-0.5 rounded border truncate cursor-pointer select-none ${conta.estaPago ? 'bg-green-50 border-green-100 text-green-700 line-through opacity-70' : 'bg-red-50 border-red-100 text-red-700 font-medium'}`}
+                                         title={`${conta.nome} - R$ ${conta.valor}`}>
+                                        {conta.nome}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                }
+                return days;
+            };
+
+            return (
+                <div className="min-h-screen pb-20">
+                    {/* Navbar */}
+                    <nav className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+                        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="bg-blue-600 text-white p-2 rounded-lg"><Icon name="dollar-sign" className="text-white"/></div>
+                                <h1 className="font-bold text-xl tracking-tight hidden sm:block text-slate-800">Minhas Finanças</h1>
+                            </div>
+                            <div className="flex items-center gap-4 bg-gray-100 rounded-full p-1 pr-4">
+                                <button onClick={() => changeMonth(-1)} className="p-1.5 hover:bg-white rounded-full shadow-sm"><Icon name="chevron-left" className="text-gray-600"/></button>
+                                <span className="font-semibold w-32 text-center text-sm text-gray-700">{viewDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase()}</span>
+                                <button onClick={() => changeMonth(1)} className="p-1.5 hover:bg-white rounded-full shadow-sm"><Icon name="chevron-right" className="text-gray-600"/></button>
+                            </div>
+                            <button onClick={() => setShowModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
+                                <Icon name="plus" size={16} className="text-white"/> <span className="hidden sm:inline">Nova Conta</span>
+                            </button>
+                        </div>
+                    </nav>
+
+                    {/* Conteúdo */}
+                    <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+                        {/* Resumo */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                                <span className="text-gray-400 text-xs font-medium uppercase">Total do Mês</span>
+                                <div className="text-2xl font-bold text-gray-800 mt-1">R$ {(dividasDoMes.totalPendente + dividasDoMes.totalPago).toFixed(2)}</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl border border-green-100 shadow-sm">
+                                <span className="text-green-600 text-xs font-medium uppercase">Já Pago</span>
+                                <div className="text-2xl font-bold text-green-700 mt-1">R$ {dividasDoMes.totalPago.toFixed(2)}</div>
+                            </div>
+                            <div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm">
+                                <span className="text-red-500 text-xs font-medium uppercase">Pendente</span>
+                                <div className="text-2xl font-bold text-red-600 mt-1">R$ {dividasDoMes.totalPendente.toFixed(2)}</div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Calendário */}
+                            <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200"><h2 className="font-semibold text-gray-700 flex items-center gap-2"><Icon name="calendar" size={16}/> Visão Mensal</h2></div>
+                                <div className="grid grid-cols-7 text-center bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 py-2">
+                                    <div>DOM</div><div>SEG</div><div>TER</div><div>QUA</div><div>QUI</div><div>SEX</div><div>SÁB</div>
+                                </div>
+                                <div className="grid grid-cols-7 bg-gray-100 gap-px border-b border-gray-200">{renderCalendarDays()}</div>
+                            </div>
+
+                            {/* Lista */}
+                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col h-[500px]">
+                                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200"><h2 className="font-semibold text-gray-700">Vencimentos</h2></div>
+                                <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                                    {dividasDoMes.itens.length === 0 ? <div className="text-center py-10 text-gray-400 text-sm">Nenhuma conta.</div> : 
+                                    dividasDoMes.itens.map(conta => (
+                                        <div key={conta.id} className="group bg-white border border-gray-100 rounded-lg p-3 hover:shadow-md transition-shadow flex items-start gap-3">
+                                            <button onClick={() => togglePagamento(conta.chavePagamento)} className={`mt-1 ${conta.estaPago ? 'text-green-500' : 'text-gray-300 hover:text-green-500'}`}>
+                                                <Icon name={conta.estaPago ? "check-circle" : "circle"} size={20}/>
+                                            </button>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-start">
+                                                    <span className={`font-medium text-sm truncate ${conta.estaPago ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{conta.nome}</span>
+                                                    <span className={`text-sm font-semibold whitespace-nowrap ${conta.estaPago ? 'text-gray-400' : 'text-slate-800'}`}>R$ {Number(conta.valor).toFixed(2)}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center mt-1 text-xs text-gray-500">
+                                                    <span>Dia {conta.dia}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{conta.parcelaAtual}/{conta.parcelas}</span>
+                                                        <button onClick={() => excluirDivida(conta.id)} className="text-gray-300 hover:text-red-500"><Icon name="trash-2" size={14}/></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+
+                    {/* Modal */}
+                    {showModal && (
+                        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+                                <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+                                    <h3 className="font-bold text-lg text-gray-800">Nova Conta</h3>
+                                    <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                                </div>
+                                <form onSubmit={handleAddConta} className="p-6 space-y-4">
+                                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label><input required className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-blue-500" value={newConta.nome} onChange={e => setNewConta({...newConta, nome: e.target.value})} placeholder="Ex: Internet"/></div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Valor</label><input required type="number" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-blue-500" value={newConta.valor} onChange={e => setNewConta({...newConta, valor: e.target.value})}/></div>
+                                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Dia</label><input required type="number" min="1" max="31" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-blue-500" value={newConta.dia} onChange={e => setNewConta({...newConta, dia: e.target.value})}/></div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                        <div><label className="block text-xs font-bold text-blue-800 mb-1">Parcelas</label><input type="number" min="1" className="w-full px-2 py-1 border border-blue-200 rounded text-sm" value={newConta.parcelas} onChange={e => setNewConta({...newConta, parcelas: e.target.value})}/></div>
+                                        <div><label className="block text-xs font-bold text-blue-800 mb-1">Mês Início</label><input type="number" min="1" max="12" className="w-full px-2 py-1 border border-blue-200 rounded text-sm" value={newConta.mesInicio} onChange={e => setNewConta({...newConta, mesInicio: e.target.value})}/></div>
+                                        <div><label className="block text-xs font-bold text-blue-800 mb-1">Ano Início</label><input type="number" className="w-full px-2 py-1 border border-blue-200 rounded text-sm" value={newConta.anoInicio} onChange={e => setNewConta({...newConta, anoInicio: e.target.value})}/></div>
+                                    </div>
+                                    <div className="pt-2 flex gap-3">
+                                        <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancelar</button>
+                                        <button type="submit" className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Salvar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
