@@ -5,19 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Minhas Finanças</title>
     
-    <!-- Tailwind CSS (Estilo) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- React e ReactDOM (Motor da Aplicação) -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    <!-- Babel (Para entender o código React no navegador) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Ícones Lucide -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
+    <script>
+        const firebaseConfig = {
+            // SUBSTITUA ESTAS CHAVES PELAS SUAS CHAVES REAIS DO PASSO 1.B
+            apiKey: "AIzaSyCasLIhPZ-eu_wisn0fNzNVEymGUouJaS0", 
+            authDomain: "minhas-finacas.firebaseapp.com",
+            projectId: "minhas-finacas",
+            storageBucket: "minhas-finacas.firebasestorage.app",
+            messagingSenderId: "1056339749032",
+            appId: "1:1056339749032:web:375d2b01c4cba2a32efa9d"
+        };
+        
+        // Inicializa o Firebase e a referência ao Banco de Dados
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        
+        // Referência do documento único onde todos os dados serão salvos (substitui o localStorage)
+        const USER_DOC_REF = db.collection("finances").doc("user_data_global");
+    </script>
     <style>
         /* Personalizações extras */
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
@@ -36,6 +53,18 @@
 
         const { useState, useEffect, useMemo } = React;
 
+        // FUNÇÃO CENTRAL: Envia o estado completo para o Firebase
+        // Isso garante que os dados de "dividas" e "pagamentos" estejam sempre sincronizados na nuvem.
+        const saveDataToFirebase = (newDividas, newPagamentos) => {
+            USER_DOC_REF.set({
+                dividas: newDividas,
+                pagamentos: newPagamentos
+            }).catch(error => {
+                console.error("Erro ao salvar no Firebase:", error);
+                alert("Erro ao salvar dados online! Verifique a conexão.");
+            });
+        };
+
         function App() {
             // --- Estado ---
             const [dividas, setDividas] = useState([]);
@@ -48,28 +77,34 @@
                 anoInicio: new Date().getFullYear()
             });
 
-            // --- Carregar/Salvar Dados (LocalStorage) ---
+            // 🚀 NOVO: useEffect para CARREGAR e SINCRONIZAR dados do Firebase (em tempo real)
             useEffect(() => {
-                const dadosSalvos = localStorage.getItem('minhas_financas_v1');
-                if (dadosSalvos) {
-                    const parsed = JSON.parse(dadosSalvos);
-                    setDividas(parsed.dividas || []);
-                    setPagamentos(parsed.pagamentos || {});
-                }
-                lucide.createIcons();
+                // onSnapshot fica "ouvindo" o Firebase. Se alguém alterar em outro dispositivo, ele atualiza aqui.
+                const unsubscribe = USER_DOC_REF.onSnapshot(doc => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        // Atualiza o estado local com os dados da nuvem
+                        setDividas(data.dividas || []);
+                        setPagamentos(data.pagamentos || {});
+                    } else {
+                        // Se for a primeira vez, salva um documento vazio para começar.
+                        saveDataToFirebase([], {});
+                    }
+                    lucide.createIcons();
+                }, (error) => {
+                    console.error("Erro ao carregar dados do Firebase:", error);
+                });
+                
+                // Limpa o "ouvinte" ao desmontar o componente
+                return () => unsubscribe();
             }, []);
 
             useEffect(() => {
-                if (dividas.length > 0 || Object.keys(pagamentos).length > 0) {
-                    localStorage.setItem('minhas_financas_v1', JSON.stringify({ dividas, pagamentos }));
-                }
-            }, [dividas, pagamentos]);
-
-            useEffect(() => {
+                // Mantém a criação de ícones para quando a tela muda
                 lucide.createIcons();
-            }, [dividas, viewDate, showModal]); // Recriar ícones quando a tela mudar
+            }, [dividas, viewDate, showModal]);
 
-            // --- Lógica de Negócios (Igual ao App original) ---
+            // --- Lógica de Negócios (Funções de alteração agora chamam saveDataToFirebase) ---
             const changeMonth = (offset) => {
                 const newDate = new Date(viewDate);
                 newDate.setMonth(newDate.getMonth() + offset);
@@ -105,7 +140,7 @@
             const handleAddConta = (e) => {
                 e.preventDefault();
                 const nova = {
-                    id: Date.now().toString(), // ID único simples
+                    id: Date.now().toString(),
                     nome: newConta.nome,
                     valor: parseFloat(newConta.valor),
                     dia: parseInt(newConta.dia),
@@ -113,28 +148,41 @@
                     mesInicio: parseInt(newConta.mesInicio),
                     anoInicio: parseInt(newConta.anoInicio),
                 };
-                setDividas([...dividas, nova]);
+                
+                const newDividas = [...dividas, nova];
+                setDividas(newDividas);
+                
+                // CHAVE: Salva a nova lista no Firebase
+                saveDataToFirebase(newDividas, pagamentos); 
+
                 setShowModal(false);
                 setNewConta({ nome: '', valor: '', dia: '', parcelas: '1', mesInicio: new Date().getMonth() + 1, anoInicio: new Date().getFullYear() });
             };
 
             const togglePagamento = (chave) => {
                 setPagamentos(prev => {
-                    const novo = { ...prev };
-                    if (novo[chave]) delete novo[chave];
-                    else novo[chave] = true;
-                    return novo;
+                    const novoPagamentos = { ...prev };
+                    if (novoPagamentos[chave]) delete novoPagamentos[chave];
+                    else novoPagamentos[chave] = true;
+
+                    // CHAVE: Salva a nova lista de pagamentos no Firebase
+                    saveDataToFirebase(dividas, novoPagamentos); 
+
+                    return novoPagamentos;
                 });
             };
 
             const excluirDivida = (id) => {
                 if(confirm("Deseja realmente excluir esta conta e todo o histórico dela?")) {
-                    setDividas(dividas.filter(d => d.id !== id));
-                    // Limpar pagamentos órfãos seria ideal, mas não crítico aqui
+                    const newDividas = dividas.filter(d => d.id !== id);
+                    setDividas(newDividas);
+                    
+                    // CHAVE: Salva a lista de dívidas atualizada no Firebase
+                    saveDataToFirebase(newDividas, pagamentos);
                 }
             };
 
-            // --- Renderização ---
+            // --- Renderização (O restante do código de renderização permanece o mesmo) ---
             const renderCalendarDays = () => {
                 const year = viewDate.getFullYear();
                 const month = viewDate.getMonth();
@@ -156,9 +204,9 @@
                             <div className="mt-1 flex flex-col gap-1 overflow-y-auto max-h-[calc(100%-24px)] custom-scrollbar">
                                 {contasDoDia.map((conta) => (
                                     <div key={conta.id} 
-                                         onClick={() => togglePagamento(conta.chavePagamento)}
-                                         className={`text-[10px] px-1 py-0.5 rounded border truncate cursor-pointer select-none ${conta.estaPago ? 'bg-green-50 border-green-100 text-green-700 line-through opacity-70' : 'bg-red-50 border-red-100 text-red-700 font-medium'}`}
-                                         title={`${conta.nome} - R$ ${conta.valor}`}>
+                                        onClick={() => togglePagamento(conta.chavePagamento)}
+                                        className={`text-[10px] px-1 py-0.5 rounded border truncate cursor-pointer select-none ${conta.estaPago ? 'bg-green-50 border-green-100 text-green-700 line-through opacity-70' : 'bg-red-50 border-red-100 text-red-700 font-medium'}`}
+                                        title={`${conta.nome} - R$ ${conta.valor}`}>
                                         {conta.nome}
                                     </div>
                                 ))}
