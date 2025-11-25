@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema Financeiro Commit JR - Compartilhado</title>
+    <title>Financeiro Commit JR - Compartilhado</title>
     
     <!-- Tailwind CSS (Estilo) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,9 +14,9 @@
             theme: {
                 extend: {
                     colors: {
-                        'primary-dark': '#0B375B',       // Azul Escuro (Principal)
-                        'primary-light': '#1A82D9',      // Azul Claro (Destaque/Hover)
-                        'accent-yellow': '#FAC835',      // Amarelo (Acento neutro/Total)
+                        'primary-dark': '#0B375B',       /* Azul Escuro (Principal) */
+                        'primary-light': '#1A82D9',      /* Azul Claro (Destaque/Hover) */
+                        'accent-yellow': '#FAC835',      /* Amarelo (Acento neutro/Total) */
                     }
                 }
             }
@@ -24,7 +24,7 @@
     </script>
     <!-- 🎨 FIM CONFIGURAÇÃO TAILWIND -->
     
-    <!-- NOVO: Link para o arquivo CSS externo -->
+    <!-- Link para o arquivo CSS externo -->
     <link rel="stylesheet" href="styles.css">
 
     <!-- React e ReactDOM (Motor da Aplicação) -->
@@ -53,6 +53,9 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const auth = firebase.auth();
+
+        // ID global e único para todos os usuários
+        const GLOBAL_DATA_ID = "main_financial_sheet";
     </script>
     <!-- 🚀 FIM FIREBASE CONFIG 🚀 -->
     
@@ -61,7 +64,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- MAPA DE ÍCONES SVG EMBUTIDOS (Versão Simples) ---
+        // --- MAPA DE ÍCONES SVG EMBUTIDOS ---
         const SVG_ICONS = {
             "users": `<circle cx="12" cy="8" r="5" /><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />`,
             "pencil": `<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />`,
@@ -81,7 +84,7 @@
         // --- Componente Icon Renderizando SVG Inline ---
         const Icon = ({ name, size = 20, className = "stroke-current", style = {} }) => {
             const svgContent = SVG_ICONS[name];
-            if (!svgContent) return null; // Retorna nulo se o ícone não for encontrado
+            if (!svgContent) return null;
 
             return (
                 <svg
@@ -113,7 +116,7 @@
             return date.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase();
         };
 
-        // Função para salvar dados no documento ESPECÍFICO (agora compartilhado)
+        // Função para salvar dados no documento GLOBAL
         const saveDataToFirebase = (userRef, newDividas, newRecebimentos, newPagamentos, newRecebimentoStatus) => {
             if (!userRef) return;
             userRef.set({
@@ -123,7 +126,6 @@
                 recebimentoStatus: newRecebimentoStatus,
             }).catch(error => {
                 console.error("Erro ao salvar no Firebase:", error);
-                // Não usamos alert(), mas é bom registrar o erro
             });
         };
 
@@ -163,82 +165,26 @@
         };
         // --- FIM ConfirmModal ---
 
-
-        // --- Componente para Configurar o ID do Grupo Compartilhado ---
-        const SharedIdInput = ({ sharedAccessId, setSharedAccessId }) => {
-            const [newId, setNewId] = useState(sharedAccessId);
-            const [isEditing, setIsEditing] = useState(false);
-
-            const handleSave = (e) => {
-                e.preventDefault();
-                // Limpa o ID para ser seguro para o Firestore
-                const cleanId = newId.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''); 
-                if (cleanId) {
-                    setSharedAccessId(cleanId);
-                    localStorage.setItem('minhas_financas_shared_id', cleanId); // Salva no local storage
-                } else {
-                    setNewId(sharedAccessId);
-                }
-                setIsEditing(false);
-            };
-
-            return (
-                // Ocultar em telas menores (sm)
-                <div className="hidden md:flex items-center gap-2 bg-gray-100 p-1.5 rounded-full border border-gray-200">
-                    <Icon name="users" size={16} className="text-gray-500"/>
-                    {!isEditing ? (
-                        <>
-                            <span className="text-xs font-medium text-gray-700 truncate">Grupo: <span className="text-primary-dark font-bold">{sharedAccessId}</span></span>
-                            <button onClick={() => setIsEditing(true)} className="text-gray-400 hover:text-primary-dark p-1">
-                                <Icon name="pencil" size={14} className="text-gray-500"/>
-                            </button>
-                        </>
-                    ) : (
-                        <form onSubmit={handleSave} className="flex gap-1">
-                            <input 
-                                type="text" 
-                                value={newId} 
-                                onChange={e => setNewId(e.target.value)}
-                                placeholder="ID do Grupo"
-                                className="px-1 py-0.5 text-xs border rounded w-32 focus:outline-none focus:border-primary-light"
-                            />
-                            {/* BOTÃO CORRIGIDO: Salvar ID de Acesso */}
-                            <button type="submit" className="text-primary-dark bg-accent-yellow hover:bg-yellow-400 px-2 py-0.5 rounded text-xs font-bold">Salvar</button>
-                        </form>
-                    )}
-                </div>
-            );
-        };
-        // --- FIM SharedIdInput ---
-
-
-        // --- COMPONENTE: AuthScreen (Tela de Login/Cadastro) ---
+        // --- Componente: AuthScreen (Tela de Login/Cadastro) ---
         const AuthScreen = ({}) => {
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
-            const [isLogin, setIsLogin] = useState(true);
             const [error, setError] = useState('');
             const [isLoading, setIsLoading] = useState(false);
 
-            const handleAuth = async (e) => {
+            // Apenas Login. Cadastro deve ser feito via Firebase Console.
+            const handleLogin = async (e) => {
                 e.preventDefault();
                 setError('');
                 setIsLoading(true);
 
                 try {
-                    if (isLogin) {
-                        await auth.signInWithEmailAndPassword(email, password);
-                    } else {
-                        await auth.createUserWithEmailAndPassword(email, password);
-                    }
+                    await auth.signInWithEmailAndPassword(email, password);
+                    // Login bem-sucedido: o listener de autenticação (onAuthStateChanged) cuidará da transição.
                 } catch (err) {
-                    let msg = "Ocorreu um erro de autenticação.";
+                    let msg = "E-mail ou senha inválidos. O cadastro deve ser feito pelo administrador.";
                     if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
                         msg = "E-mail ou senha inválidos.";
-                    } else if (err.code === 'auth/email-already-in-use') {
-                        msg = "Este e-mail já está em uso.";
-                    } else if (err.code === 'auth/weak-password') {
-                        msg = "A senha deve ter pelo menos 6 caracteres.";
                     }
                     setError(msg);
                 } finally {
@@ -261,11 +207,12 @@
                             </div>
                             {/* FIM LOGO */}
 
-                            <h1 className="text-3xl font-bold">Sistema Financeiro <span className="text-accent-yellow">Commit JR</span></h1>
-                            <p className="mt-1 text-sm opacity-80">Acesso Compartilhado</p>
+                            {/* TÍTULO CORRIGIDO: Removida a palavra 'Sistema' */}
+                            <h1 className="3xl font-bold">Financeiro <span className="text-accent-yellow">Commit JR</span></h1>
+                            <p className="mt-1 text-sm opacity-80">Acesso Autenticado</p>
                         </div>
-                        <form onSubmit={handleAuth} className="p-8 space-y-5">
-                            <h2 className="text-xl font-semibold text-gray-800 text-center">{isLogin ? 'Fazer Login' : 'Criar Conta'}</h2>
+                        <form onSubmit={handleLogin} className="p-8 space-y-5">
+                            <h2 className="text-xl font-semibold text-gray-800 text-center">Fazer Login</h2>
                             
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
@@ -296,17 +243,11 @@
                             <button 
                                 type="submit" 
                                 disabled={isLoading}
-                                className={`w-full px-4 py-3 rounded-lg text-white font-semibold transition-colors flex items-center justify-center gap-2 ${isLoading ? 'bg-primary-dark/70 cursor-not-allowed' : 'bg-primary-dark hover:bg-primary-light'}`}>
+                                className={`btn-primary w-full px-4 py-3 text-white font-semibold flex items-center justify-center gap-2 ${isLoading ? 'bg-primary-dark/70 cursor-not-allowed' : 'bg-primary-dark hover:bg-primary-light'}`}>
                                 {isLoading && <Icon name="loader-2" size={16} className="animate-spin" />}
-                                {isLogin ? 'Entrar' : 'Cadastrar'}
+                                Entrar
                             </button>
-
-                            <button 
-                                type="button" 
-                                onClick={() => setIsLogin(!isLogin)}
-                                className="w-full text-sm text-primary-dark hover:text-primary-light transition mt-3">
-                                {isLogin ? 'Não tem uma conta? Cadastre-se' : 'Já tem conta? Faça Login'}
-                            </button>
+                            <p className="text-xs text-gray-500 text-center mt-3">Novo usuário? O cadastro deve ser feito pelo administrador no Firebase Console.</p>
                         </form>
                     </div>
                 </div>
@@ -316,13 +257,12 @@
         // --- COMPONENTE: PlanilhaView (Nova Tela) ---
         const PlanilhaView = ({ movimentacoes, excluirDivida, toggleStatus, isDataLoading }) => {
 
-            // Estado para gerenciar as abas internas (Tabela ou Setores)
+            // Estado para gerenciar as abas internas (tabela é a única aba)
             const [innerView, setInnerView] = useState('tabela'); 
 
             // 1. Calcular Saldo Acumulado Mês a Mês para o Gráfico
             const chartData = useMemo(() => {
                 if(isDataLoading) return { chartArray: [], maxAbsValue: 0 }; 
-                // ... (Logic for chartData remains the same)
                 
                 const today = new Date();
                 const currentMonthIndex = today.getMonth() + 1;
@@ -472,9 +412,8 @@
                                                     <button 
                                                         onClick={() => excluirDivida(item.id, item.tipo)}
                                                         title="Excluir Conta"
-                                                        className="text-gray-400 hover:text-red-500">
-                                                        {/* ÍCONE DE LIXEIRA CORRIGIDO */}
-                                                        <Icon name="trash-2" size={16} className="text-accent-yellow hover:text-red-700"/>
+                                                        className="btn-trash p-1 bg-red-100/70 hover:bg-red-200">
+                                                        <Icon name="trash-2" size={16} className="text-red-500 hover:text-red-700"/>
                                                     </button>
                                                 </td>
                                             </tr>
@@ -550,7 +489,7 @@
                     <div className="flex bg-gray-100 p-1 rounded-xl">
                         <button 
                             onClick={() => setInnerView('tabela')}
-                            className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${innerView === 'tabela' ? 'bg-primary-dark text-white shadow-sm' : 'bg-accent-yellow text-primary-dark hover:bg-yellow-400'}`}>
+                            className={`flex-1 btn-nav px-4 py-2 text-sm font-semibold rounded-lg ${innerView === 'tabela' ? 'bg-primary-dark text-white shadow-sm' : 'bg-gray-100 text-primary-dark hover:bg-white'}`}>
                             Histórico Completo
                         </button>
                     </div>
@@ -569,17 +508,14 @@
             const [isAuthReady, setIsAuthReady] = useState(false);
             const [isDataLoading, setIsDataLoading] = useState(true); 
             
-            // ID de acesso compartilhado: Puxa do localStorage ou usa o padrão
-            const [sharedAccessId, setSharedAccessId] = useState(
-                localStorage.getItem('minhas_financas_shared_id') || 'grupo_principal'
-            ); 
+            // REMOVIDO: sharedAccessId
 
             const [dividas, setDividas] = useState([]);
             const [recebimentos, setRecebimentos] = useState([]); 
             const [pagamentos, setPagamentos] = useState({});
             const [recebimentoStatus, setRecebimentoStatus] = useState({}); 
             
-            // viewDate é um estado React, corrigido.
+            // viewDate é um estado React
             const [viewDate, setViewDate] = useState(new Date()); 
             
             const [showModal, setShowModal] = useState(false);
@@ -596,9 +532,9 @@
                 tipo: 'divida',
             });
 
-            // 1. Definição Dinâmica da Referência do Firestore
+            // 1. Definição Global e Estática da Referência do Firestore (CORRIGIDO)
             const USER_DOC_REF = user 
-                ? db.collection("shared_finances").doc(sharedAccessId) 
+                ? db.collection("shared_finances").doc(GLOBAL_DATA_ID) 
                 : null;
 
 
@@ -613,6 +549,7 @@
 
             // 🚀 EFEITO 2: Listener do Firestore (Carrega os dados)
             useEffect(() => {
+                // Apenas executa se o usuário estiver autenticado
                 if (!user || !USER_DOC_REF) {
                     setDividas([]);
                     setRecebimentos([]);
@@ -624,6 +561,7 @@
 
                 setIsDataLoading(true); 
                 
+                // Ouve o documento GLOBAL_DATA_ID
                 const unsubscribeData = USER_DOC_REF.onSnapshot(doc => {
                     if (doc.exists) {
                         const data = doc.data();
@@ -632,17 +570,19 @@
                         setPagamentos(data.pagamentos || {});
                         setRecebimentoStatus(data.recebimentoStatus || {});
                     } else {
+                        // Se o documento não existir, ele é criado com dados iniciais vazios
                         saveDataToFirebase(USER_DOC_REF, [], [], {}, {});
                     }
                     setIsDataLoading(false); 
                 }, (error) => {
                     console.error("Erro ao carregar dados do Firebase:", error);
-                    alert("ERRO CRÍTICO: Não foi possível carregar os dados. Verifique as Regras de Segurança do Firestore ou a conexão.");
+                    // Não precisa de alert(), mas registra o erro
                     setIsDataLoading(false); 
                 });
                 
+                // A dependência sharedAccessId foi removida
                 return () => unsubscribeData();
-            }, [user, sharedAccessId]); 
+            }, [user]); 
             
             // --- Lógica de Negócios (Movimentações e Saldo) ---
             
@@ -959,7 +899,7 @@
                                                     <div className="flex items-center gap-2">
                                                         <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{conta.parcelaAtual}/{conta.parcelas}</span>
                                                         <button onClick={() => excluirDivida(conta.id, conta.tipo)} className="text-gray-400 hover:text-red-500">
-                                                            <Icon name="trash-2" size={14} className="text-accent-yellow hover:text-red-700"/>
+                                                            <Icon name="trash-2" size={14} className="text-red-500 hover:text-red-700"/>
                                                         </button>
                                                     </div>
                                                 </div>
@@ -994,7 +934,7 @@
                  return (
                     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
                         <Icon name="loader-2" size={48} className="text-primary-dark animate-spin mb-4" />
-                        <p className="text-gray-600">Carregando dados financeiros de {sharedAccessId}...</p>
+                        <p className="text-gray-600">Carregando dados financeiros...</p>
                     </div>
                 );
             }
@@ -1009,7 +949,8 @@
                             
                             {/* 🎨 Logo e Nome */}
                             <div className="flex items-center gap-2">
-                                <div className="p-2 rounded-lg bg-primary-dark shadow-md">
+                                {/* REMOVENDO O FUNDO AZUL (p-2 rounded-lg bg-primary-dark shadow-md) */}
+                                <div className="p-2 rounded-lg"> 
                                     {/* LOGO MENOR NA NAVBAR (utiliza o caminho externo) */}
                                     <img 
                                         src={LOGO_URL} 
@@ -1019,21 +960,21 @@
                                     />
                                     {/* FIM LOGO */}
                                 </div>
-                                {/* CORREÇÃO: Alinhamento de texto e nome da aplicação */}
-                                <h1 className="font-bold text-xl tracking-tight text-slate-800">Sistema Financeiro <span className="text-primary-dark">Commit JR</span></h1>
+                                {/* TÍTULO CORRIGIDO: Removida a palavra 'Sistema' */}
+                                <h1 className="font-bold text-xl tracking-tight text-slate-800">Financeiro <span className="text-primary-dark">Commit JR</span></h1>
                             </div>
 
                             {/* 🔄 Navegação Principal */}
                             <div className="flex items-center gap-2 bg-gray-100 rounded-full p-1">
                                 <button 
                                     onClick={() => setView('calendario')} 
-                                    className={`px-3 sm:px-4 py-2 rounded-full text-sm font-semibold transition-colors flex items-center gap-1 ${view === 'calendario' ? 'bg-primary-dark text-white shadow-md' : 'bg-accent-yellow text-primary-dark hover:bg-yellow-400'}`}>
+                                    className={`btn-nav p-2 rounded-full text-sm font-semibold flex items-center gap-1 ${view === 'calendario' ? 'bg-primary-dark text-white shadow-md' : 'bg-gray-100 text-primary-dark hover:bg-white'}`}>
                                     <Icon name="calendar" size={16} className={view === 'calendario' ? 'text-white' : 'text-primary-dark'}/> 
                                     <span className="hidden sm:inline">Calendário</span> 
                                 </button>
                                 <button 
                                     onClick={() => setView('planilha')} 
-                                    className={`px-3 sm:px-4 py-2 rounded-full text-sm font-semibold transition-colors flex items-center gap-1 ${view === 'planilha' ? 'bg-primary-dark text-white shadow-md' : 'bg-accent-yellow text-primary-dark hover:bg-yellow-400'}`}>
+                                    className={`btn-nav p-2 rounded-full text-sm font-semibold flex items-center gap-1 ${view === 'planilha' ? 'bg-primary-dark text-white shadow-md' : 'bg-gray-100 text-primary-dark hover:bg-white'}`}>
                                     <Icon name="layout-list" size={16} className={view === 'planilha' ? 'text-white' : 'text-primary-dark'}/> 
                                     <span className="hidden sm:inline">Planilha</span>
                                 </button>
@@ -1042,25 +983,24 @@
                             {/* 🗓 Botões de Ação Específicos da View */}
                             <div className="flex items-center gap-4">
                                 
-                                {/* Configuração do ID de Acesso (Botão de alterar grupo) - OCULTO EM TELAS PEQUENAS */}
-                                <SharedIdInput sharedAccessId={sharedAccessId} setSharedAccessId={setSharedAccessId} />
+                                {/* O CAMPO DE GRUPO FOI REMOVIDO DA INTERFACE */}
 
                                 {view === 'calendario' ? (
                                     <div className="flex items-center gap-4 bg-gray-100 rounded-full p-1 pr-4 hidden md:flex">
                                         {/* ÍCONES DE NAVEGAÇÃO DO MÊS AJUSTADOS (Cor Primária) */}
                                         <button onClick={() => changeMonth(-1)} className="p-1.5 hover:bg-white rounded-full shadow-sm text-primary-dark hover:text-primary-light">
-                                            <Icon name="chevron-left" className="w-4 h-4"/>
+                                            <Icon name="chevron-left" className="w-4 h-4 text-primary-dark"/> {/* COR AZUL */}
                                         </button>
                                         <span className="font-semibold w-32 text-center text-sm text-gray-700">{viewDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase()}</span>
                                         <button onClick={() => changeMonth(1)} className="p-1.5 hover:bg-white rounded-full shadow-sm text-primary-dark hover:text-primary-light">
-                                            <Icon name="chevron-right" className="w-4 h-4"/>
+                                            <Icon name="chevron-right" className="w-4 h-4 text-primary-dark"/> {/* COR AZUL */}
                                         </button>
                                     </div>
                                 ) : (
                                     <div className="w-16 hidden md:block"></div>
                                 )}
                                 
-                                <button onClick={() => setShowModal(true)} className="bg-primary-dark hover:bg-primary-light text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
+                                <button onClick={() => setShowModal(true)} className="btn-primary bg-primary-dark hover:bg-primary-light text-white px-4 py-2 text-sm font-medium flex items-center gap-2 shadow-sm">
                                     <Icon name="plus" size={16}/> <span className="hidden sm:inline">Nova Conta</span>
                                 </button>
 
@@ -1118,7 +1058,7 @@
                                     </div>
                                     <div className="pt-2 flex gap-3">
                                         <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">Cancelar</button>
-                                        <button type="submit" className="flex-1 px-4 py-2 bg-primary-dark text-white rounded-lg hover:bg-primary-light">Salvar</button>
+                                        <button type="submit" className="flex-1 btn-primary bg-primary-dark hover:bg-primary-light text-white px-4 py-2 text-sm font-medium">Salvar</button>
                                     </div>
                                 </form>
                             </div>
