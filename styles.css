@@ -5,19 +5,19 @@
     width: 4px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-    background: #1A82D9;
+    background: #f1f1f1;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #1A82D9;
+    background: #cbd5e1;
     border-radius: 4px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #1A82D9;
+    background: #94a3b8;
 }
 
-/* PLANO DE FUNDO DO CORPO DA PÁGINA (CORRIDA PARA #2E3F42) */
+/* PLANO DE FUNDO DO CORPO DA PÁGINA (VOLTANDO AO CLARO) */
 body {
-    background-color: #FFFFFF; 
+    background-color: #f8fafc; /* Cinza muito claro, quase branco */
 }
 
 /* TRANSIÇÃO PARA BARRAS DO GRÁFICO */
