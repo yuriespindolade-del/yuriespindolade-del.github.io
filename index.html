@@ -169,6 +169,7 @@
         const AuthScreen = ({}) => {
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
+            const [rememberMe, setRememberMe] = useState(true); // NOVO: Estado para "Continuar Conectado"
             const [error, setError] = useState('');
             const [isLoading, setIsLoading] = useState(false);
 
@@ -179,7 +180,16 @@
                 setIsLoading(true);
 
                 try {
+                    // 1. Define a persistência com base no checkbox
+                    const persistenceType = rememberMe 
+                        ? firebase.auth.Auth.Persistence.LOCAL // Mantém logado
+                        : firebase.auth.Auth.Persistence.SESSION; // Dura apenas a sessão/aba
+                    
+                    await auth.setPersistence(persistenceType);
+                    
+                    // 2. Faz o login
                     await auth.signInWithEmailAndPassword(email, password);
+
                     // Login bem-sucedido: o listener de autenticação (onAuthStateChanged) cuidará da transição.
                 } catch (err) {
                     let msg = "E-mail ou senha inválidos. O cadastro deve ser feito pelo administrador.";
@@ -237,6 +247,21 @@
                                     placeholder="Mínimo 6 caracteres"
                                 />
                             </div>
+
+                            {/* NOVO: Checkbox Continuar Conectado */}
+                            <div className="flex items-center">
+                                <input 
+                                    id="rememberMe"
+                                    type="checkbox"
+                                    checked={rememberMe}
+                                    onChange={e => setRememberMe(e.target.checked)}
+                                    className="h-4 w-4 text-primary-dark border-gray-300 rounded focus:ring-primary-light"
+                                />
+                                <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-900">
+                                    Continuar conectado
+                                </label>
+                            </div>
+                            {/* FIM Checkbox */}
                             
                             {error && <div className="p-2 bg-red-100 text-red-700 rounded-lg text-sm">{error}</div>}
 
