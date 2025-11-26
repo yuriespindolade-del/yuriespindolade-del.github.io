@@ -34,6 +34,9 @@
     <!-- Babel (Para entender o código React no navegador) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
+    <!-- Chart.js para gráficos avançados -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    
     <!-- 🚀 SCRIPTS E CONFIGURAÇÃO DO FIREBASE 🚀 -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
@@ -54,8 +57,7 @@
         const db = firebase.firestore();
         const auth = firebase.auth();
 
-        // ID global e único para todos os usuários
-        const GLOBAL_DATA_ID = "main_financial_sheet";
+        // NOTA: GLOBAL_DATA_ID e MANAGEMENT_COLLECTION foram movidos para o script Babel
     </script>
     <!-- 🚀 FIM FIREBASE CONFIG 🚀 -->
     
@@ -64,6 +66,10 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        // --- CONSTANTES DE FIREBASE DISPONÍVEIS NO ESCOPO REACT ---
+        const GLOBAL_DATA_ID = "main_financial_sheet";
+        const MANAGEMENT_COLLECTION = "management_periods"; // Nova coleção para gerenciar o Saldo Inicial por Guia
+        
         // --- MAPA DE ÍCONES SVG EMBUTIDOS ---
         const SVG_ICONS = {
             "users": `<circle cx="12" cy="8" r="5" /><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />`,
@@ -80,6 +86,8 @@
             "minus-circle": `<circle cx="12" cy="12" r="10" /><path d="M8 12L16 12" />`,
             "trash-2": `<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" />`,
             "receipt": `<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1zM8 12h8m-8 4h8" />`,
+            "target": `<circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" />`,
+            "dollar-sign": `<line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />`,
         };
 
         // --- Componente Icon Renderizando SVG Inline ---
@@ -106,7 +114,7 @@
         // --- LOGO EXTERNO (GitHub) ---
         const LOGO_URL = "./araralogo.png"; 
 
-        const { useState, useEffect, useMemo, useCallback } = React;
+        const { useState, useEffect, useMemo, useCallback, useRef } = React;
         
         // --- FUNÇÕES GLOBAIS DE UTILIDADE ---
         const getMonthDifference = (startMonth, startYear, endMonth, endYear) => 
@@ -125,20 +133,36 @@
         };
 
         // Função para salvar dados no documento GLOBAL
-        const saveDataToFirebase = (userRef, newDividas, newRecebimentos, newPagamentos, newRecebimentoStatus) => {
+        const saveDataToFirebase = (userRef, data) => {
             if (!userRef) return;
-            userRef.set({
-                dividas: newDividas,
-                recebimentos: newRecebimentos, 
-                pagamentos: newPagamentos,
-                recebimentoStatus: newRecebimentoStatus,
-            }).catch(error => {
+            userRef.set(data).catch(error => {
                 console.error("Erro ao salvar no Firebase:", error);
             });
         };
+        
+        // Função para salvar dados de Metas
+        const saveGoalsToFirebase = (goalsRef, newGoals) => {
+            if (!goalsRef) return;
+            goalsRef.set({ items: newGoals }).catch(error => {
+                console.error("Erro ao salvar Metas no Firebase:", error);
+            });
+        };
+        
+        // Função para salvar dados de Gestão (Saldo Inicial)
+        const saveManagementData = (mgmtRef, balance, id) => {
+             if (!mgmtRef) return;
+             const data = {
+                initial_balance: balance,
+                lastUpdated: new Date().toISOString()
+            };
+             mgmtRef.set(data, { merge: true }).catch(error => {
+                console.error(`Erro ao salvar Gestão (${id}) no Firebase:`, error);
+            });
+        }
+
 
         // --- Componente para Modal de Detalhe/Pagamento (NOVO) ---
-        const PaymentModal = ({ isOpen, onClose, onConfirm, item, toggleStatus }) => {
+        const PaymentModal = ({ isOpen, onClose, item, toggleStatus }) => {
             if (!isOpen || !item) return null;
             
             const isReceita = item.tipo === 'recebimento';
@@ -155,7 +179,6 @@
                 toggleStatus(item.chaveStatus, item.tipo); 
 
                 // 2. Aqui você enviaria 'paymentData' ao Firestore para salvar data/comprovante
-                // Como não estamos armazenando data/comprovante por parcela, vamos simular o log:
                 console.log(`Detalhes de ${statusLabel} para ${item.nome} (${item.chaveStatus}):`, paymentData);
 
                 onClose();
@@ -257,6 +280,169 @@
         };
         // --- FIM ConfirmModal ---
 
+        // --- Componente para Edição de Caixa Inicial (Modal) ---
+        const EditInitialCashModal = ({ isOpen, onClose, initialBalance, managementId, saveManagement, mgmtRef }) => {
+            if (!isOpen) return null;
+            // Estado local para o novo valor do input, usando o valor atual como padrão
+            const [newBalance, setNewBalance] = useState(initialBalance || 0);
+
+            const handleSave = (e) => {
+                e.preventDefault();
+                saveManagement(mgmtRef, parseFloat(newBalance), managementId);
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+                        <div className="p-6">
+                            <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2 text-primary-dark">
+                                <Icon name="dollar-sign" size={20}/>
+                                Editar Saldo Inicial ({managementId})
+                            </h3>
+                            <p className="mt-2 text-sm text-gray-600">
+                                Defina o caixa inicial desta gestão.
+                            </p>
+                            
+                            <form onSubmit={handleSave} className="mt-4 space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Novo Saldo Inicial (R$)</label>
+                                    <input 
+                                        type="number"
+                                        step="0.01"
+                                        required
+                                        value={newBalance} 
+                                        onChange={e => setNewBalance(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-primary-light"
+                                    />
+                                </div>
+                                
+                                <div className="flex justify-end gap-3 pt-4 border-t">
+                                    <button type="button" onClick={onClose} className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">
+                                        Cancelar
+                                    </button>
+                                    <button type="submit" className="px-4 py-2 bg-primary-dark text-white rounded-lg hover:bg-primary-light font-bold">
+                                        Salvar Caixa
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Componente Gráfico de Linhas Chart.js (MOVIMENTO PARA CIMA) ---
+        const MonthlyChart = ({ chartData }) => {
+            const chartRef = useRef(null);
+            const chartInstanceRef = useRef(null);
+            
+            const labels = chartData.map(d => `${getMonthName(d.month)}/${d.year.toString().slice(2)}`);
+            const revenues = chartData.map(d => d.receitas);
+            const expenses = chartData.map(d => d.despesas);
+            const cumulativeBalances = chartData.map(d => d.cumulativeBalance);
+
+            useEffect(() => {
+                if (chartInstanceRef.current) {
+                    chartInstanceRef.current.destroy(); // Destrói instância anterior
+                }
+
+                if (chartRef.current && chartData.length > 0) {
+                    const ctx = chartRef.current.getContext('2d');
+                    
+                    chartInstanceRef.current = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Receitas Mensais (R$)',
+                                    data: revenues,
+                                    borderColor: '#10B981', // Verde
+                                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                    fill: false,
+                                    tension: 0.3,
+                                    yAxisID: 'y1',
+                                },
+                                {
+                                    label: 'Despesas Mensais (R$)',
+                                    data: expenses,
+                                    borderColor: '#EF4444', // Vermelho
+                                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                    fill: false,
+                                    tension: 0.3,
+                                    yAxisID: 'y1',
+                                },
+                                {
+                                    label: 'Saldo Acumulado (R$)',
+                                    data: cumulativeBalances,
+                                    borderColor: '#0B375B', // Azul Escuro (primary-dark)
+                                    backgroundColor: 'rgba(11, 55, 91, 0.2)',
+                                    fill: true,
+                                    tension: 0.4,
+                                    yAxisID: 'y2', // Usar eixo secundário
+                                    pointRadius: 4,
+                                    borderWidth: 3
+                                },
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false,
+                            },
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                },
+                                title: {
+                                    display: false,
+                                },
+                            },
+                            scales: {
+                                x: {
+                                    grid: { display: false }
+                                },
+                                y1: { // Eixo Y para Receitas e Despesas (Mensal)
+                                    type: 'linear',
+                                    position: 'left',
+                                    title: {
+                                        display: true,
+                                        text: 'Movimentação Mensal (R$)',
+                                    },
+                                    grid: { borderDash: [5, 5] },
+                                    ticks: { color: '#0B375B' }
+                                },
+                                y2: { // Eixo Y para Saldo Acumulado
+                                    type: 'linear',
+                                    position: 'right',
+                                    title: {
+                                        display: true,
+                                        text: 'Saldo Acumulado (R$)',
+                                    },
+                                    grid: { drawOnChartArea: false }, // Esconde linhas de grid
+                                    ticks: { color: '#1A82D9' }
+                                }
+                            }
+                        }
+                    });
+                }
+            }, [chartData]); 
+
+            return (
+                <div className="chart-container">
+                    {chartData.length === 0 ? (
+                        <div className="text-center py-20 text-gray-400">Nenhum dado realizado para o gráfico.</div>
+                    ) : (
+                        <canvas ref={chartRef}></canvas>
+                    )}
+                </div>
+            );
+        };
+        // --- FIM MonthlyChart ---
+
         // --- Componente: AuthScreen (Tela de Login/Cadastro) ---
         const AuthScreen = ({}) => {
             const [email, setEmail] = useState('');
@@ -272,7 +458,6 @@
                 setIsLoading(true);
 
                 try {
-                    // 1. Define a persistência com base no checkbox
                     const persistenceType = rememberMe 
                         ? firebase.auth.Auth.Persistence.LOCAL // Mantém logado
                         : firebase.auth.Auth.Persistence.SESSION; // Dura apenas a sessão/aba
@@ -371,76 +556,245 @@
             );
         };
         
-        // --- COMPONENTE: PlanilhaView (Nova Tela) ---
-        const PlanilhaView = ({ movimentacoes, excluirDivida, toggleStatus, isDataLoading }) => {
-            // Reintroduzida prop excluirDivida e toggleStatus
+        // --- COMPONENTE: GoalsView (Nova View de Metas) ---
+        const GoalsView = ({ goals, lifetimeMovimentacoes, initialBalance }) => {
+            
+            // Referência fixa para Metas (Acessível globalmente)
+            const GOALS_DOC_REF = db.collection("goals").doc("master_goals");
 
-            // Estado para gerenciar as abas internas (tabela é a única aba)
-            const [innerView, setInnerView] = useState('tabela'); 
+            const [newGoal, setNewGoal] = useState({ name: '', value: '', description: '' });
+            
+            const handleAddGoal = (e) => {
+                e.preventDefault();
+                const newGoalItem = {
+                    id: Date.now().toString(),
+                    name: newGoal.name,
+                    value: parseFloat(newGoal.value),
+                    description: newGoal.description,
+                    createdAt: new Date().toISOString(),
+                    targetValue: parseFloat(newGoal.value), // Valor alvo
+                };
+                const updatedGoals = [...goals, newGoalItem];
+                saveGoalsToFirebase(GOALS_DOC_REF, updatedGoals);
+                setNewGoal({ name: '', value: '', description: '' });
+            };
 
-            // 1. Calcular Saldo Acumulado Mês a Mês para o Gráfico
-            const chartData = useMemo(() => {
-                if(isDataLoading) return { chartArray: [], maxAbsValue: 0 }; 
-                
-                const today = new Date();
-                const currentMonthIndex = today.getMonth() + 1;
-                const currentYear = today.getFullYear();
-                
+            const handleDeleteGoal = (id) => {
+                const updatedGoals = goals.filter(g => g.id !== id);
+                saveGoalsToFirebase(GOALS_DOC_REF, updatedGoals);
+            };
+
+            // 1. Calcular Saldo Acumulado Mês a Mês (usando a mesma lógica da Planilha)
+            const chartDataCalculated = useMemo(() => {
                 const monthlyData = {};
-                const maxMonthsToShow = 12; 
-                let cumulativeBalance = 0;
-                let maxAbsValue = 0;
-
-                let startYear = currentYear;
-                let startMonth = currentMonthIndex;
                 
-                movimentacoes.allMovimentacoes.forEach(item => {
-                    if (item.parcelaAno < startYear || (item.parcelaAno === startYear && item.parcelaMes < startMonth)) {
-                        startYear = item.parcelaAno;
-                        startMonth = item.parcelaMes;
+                lifetimeMovimentacoes.allMovimentacoes.forEach(item => {
+                    const monthKey = `${item.parcelaAno}-${String(item.parcelaMes).padStart(2, '0')}`;
+                    if (!monthlyData[monthKey]) {
+                        monthlyData[monthKey] = { receitas: 0, despesas: 0, cumulativeBalance: 0, month: item.parcelaMes, year: item.parcelaAno };
                     }
-                });
-
-                const totalMonths = getMonthDifference(startMonth, startYear, currentMonthIndex, currentYear) + 1;
-                const effectiveStartMonth = totalMonths > maxMonthsToShow 
-                    ? currentMonthIndex - (maxMonthsToShow - 1) 
-                    : startMonth;
-                const effectiveStartYear = totalMonths > maxMonthsToShow 
-                    ? currentYear - Math.floor((maxMonthsToShow - 1) / 12)
-                    : startYear;
-
-                const todayYear = today.getFullYear();
-                const todayMonth = today.getMonth() + 1;
-                
-                for (let i = 0; i < totalMonths; i++) {
-                    let year = effectiveStartYear;
-                    let month = effectiveStartMonth + i;
-                    while (month > 12) {
-                        month -= 12;
-                        year += 1;
-                    }
-                    
-                    const monthKey = `${year}-${String(month).padStart(2, '0')}`;
-                    monthlyData[monthKey] = { receitas: 0, despesas: 0, saldo: 0, month, year };
-                    
-                    if (year > todayYear || (year === todayYear && month > todayMonth)) break;
-                }
-                
-
-                movimentacoes.allMovimentacoes.forEach(item => {
-                    const key = `${item.parcelaAno}-${String(item.parcelaMes).padStart(2, '0')}`;
-                    
-                    if (monthlyData[key] && item.estaPago) {
+                    if (item.estaPago) {
                         if (item.tipo === 'recebimento') {
-                            monthlyData[key].receitas += item.valor;
+                            monthlyData[monthKey].receitas += item.valor;
                         } else {
-                            monthlyData[key].despesas += item.valor;
+                            monthlyData[monthKey].despesas += item.valor;
                         }
                     }
                 });
                 
-                const chartArray = Object.values(monthlyData);
+                const chartArray = Object.values(monthlyData).sort((a, b) => {
+                    if (a.year !== b.year) return a.year - b.year;
+                    return a.month - b.month;
+                });
                 
+                let cumulativeBalance = initialBalance;
+                chartArray.forEach(data => {
+                    data.saldo = data.receitas - data.despesas;
+                    cumulativeBalance += data.saldo;
+                    data.cumulativeBalance = cumulativeBalance;
+                });
+
+                return chartArray;
+                
+            }, [lifetimeMovimentacoes, initialBalance]);
+            
+            // 2. Gráfico de Comparação de Metas
+            const GoalsChart = () => {
+                const chartRef = useRef(null);
+                const chartInstanceRef = useRef(null);
+                
+                const labels = chartDataCalculated.map(d => `${getMonthName(d.month)}/${d.year.toString().slice(2)}`);
+                const actualBalances = chartDataCalculated.map(d => d.cumulativeBalance);
+                const firstBalance = actualBalances.length > 0 ? actualBalances[0] : 0;
+                
+                // Pega a primeira meta com valor definido para plotar o alvo
+                const targetGoal = goals.find(g => g.targetValue > 0);
+                const targetValue = targetGoal ? targetGoal.targetValue : 0;
+                
+                // Cria a linha da meta (reta no valor alvo)
+                const targetLineData = actualBalances.map(() => targetValue);
+                
+                // Mapeia os dados para Chart.js
+                const chartData = {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Saldo Acumulado Real (R$)',
+                            data: actualBalances,
+                            borderColor: '#0B375B', // Azul Escuro
+                            backgroundColor: 'rgba(11, 55, 91, 0.4)',
+                            fill: true,
+                            tension: 0.4,
+                            yAxisID: 'y',
+                            pointRadius: 4,
+                            borderWidth: 3
+                        },
+                        {
+                            label: `Meta: ${targetGoal ? targetGoal.name : 'Nenhuma Meta'} (R$ ${targetValue.toFixed(2)})`,
+                            data: targetLineData,
+                            borderColor: '#EF4444', // Linha da Meta em Vermelho
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            borderDash: [5, 5], // Linha tracejada
+                            fill: false,
+                            tension: 0,
+                            pointRadius: 0,
+                            yAxisID: 'y',
+                        },
+                    ]
+                };
+
+                useEffect(() => {
+                    if (chartInstanceRef.current) {
+                        chartInstanceRef.current.destroy();
+                    }
+
+                    if (chartRef.current && chartDataCalculated.length > 0) {
+                        const ctx = chartRef.current.getContext('2d');
+                        
+                        chartInstanceRef.current = new Chart(ctx, {
+                            type: 'line',
+                            data: chartData,
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                interaction: { mode: 'index', intersect: false },
+                                plugins: { legend: { position: 'bottom' } },
+                                scales: {
+                                    x: { grid: { display: false } },
+                                    y: { 
+                                        type: 'linear',
+                                        position: 'left',
+                                        title: { display: true, text: 'Valor (R$)' },
+                                        beginAtZero: false,
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }, [goals, lifetimeMovimentacoes]); // Recalcula quando as metas ou movimentações mudam
+                
+                return (
+                    <div className="chart-container">
+                         {chartDataCalculated.length === 0 ? (
+                            <div className="text-center py-20 text-gray-400">Adicione metas e movimentações para ver o gráfico.</div>
+                        ) : (
+                            <canvas ref={chartRef}></canvas>
+                        )}
+                    </div>
+                );
+            };
+
+            return (
+                <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+                    <h2 className="2xl font-bold text-primary-dark border-b pb-2 flex items-center gap-2"><Icon name="target" size={24}/> Metas e Planejamento</h2>
+
+                    {/* Formulário para Adicionar Meta */}
+                    <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+                        <h3 className="xl font-semibold mb-4 text-gray-800">Nova Meta</h3>
+                        <form onSubmit={handleAddGoal} className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div><label className="block text-sm font-medium text-gray-700">Nome (Ex: Faturamento Anual)</label><input required className="w-full px-3 py-2 border rounded-lg focus:border-primary-light" value={newGoal.name} onChange={e => setNewGoal({...newGoal, name: e.target.value})}/></div>
+                                <div><label className="block text-sm font-medium text-gray-700">Valor Alvo (R$)</label><input required type="number" step="0.01" className="w-full px-3 py-2 border rounded-lg focus:border-primary-light" value={newGoal.value} onChange={e => setNewGoal({...newGoal, value: e.target.value})}/></div>
+                                <div><label className="block text-sm font-medium text-gray-700">Descrição</label><input required className="w-full px-3 py-2 border rounded-lg focus:border-primary-light" value={newGoal.description} onChange={e => setNewGoal({...newGoal, description: e.target.value})}/></div>
+                            </div>
+                            <div className="flex justify-end">
+                                <button type="submit" className="btn-primary bg-primary-dark px-4 py-2 text-white">Adicionar Meta</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    {/* Gráfico de Metas */}
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 h-96">
+                        <h3 className="font-semibold text-gray-700 mb-4">Comparativo de Lucro Acumulado vs. Meta</h3>
+                        <GoalsChart />
+                    </div>
+
+                    {/* Lista de Metas */}
+                    <div className="space-y-4 pt-4">
+                        <h3 className="xl font-semibold text-gray-800">Metas Cadastradas</h3>
+                        {goals.length === 0 ? (
+                            <div className="text-center py-5 text-gray-400 border rounded-lg bg-gray-50">Nenhuma meta definida.</div>
+                        ) : (
+                            goals.map(goal => (
+                                <div key={goal.id} className="bg-white p-4 rounded-xl shadow-sm border border-primary-light/30 flex justify-between items-center">
+                                    <div className="flex-1">
+                                        <h4 className="font-semibold text-lg text-primary-dark">{goal.name}</h4>
+                                        <p className="text-sm text-gray-600">Alvo: R$ {Number(goal.targetValue).toFixed(2)}</p>
+                                        <p className="text-xs text-gray-500 mt-1">{goal.description}</p>
+                                    </div>
+                                    <button onClick={() => handleDeleteGoal(goal.id)} className="btn-trash">
+                                        <Icon name="trash-2" size={18} className="text-red-500"/>
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </main>
+            );
+        };
+        // --- FIM GoalsView ---
+
+
+        // --- COMPONENTE: PlanilhaView (Nova Tela) ---
+        const PlanilhaView = ({ movimentacoes, excluirDivida, toggleStatus, isDataLoading, managementData, currentManagementId, saveManagement }) => {
+            
+            const [innerView, setInnerView] = useState('grafico'); 
+            const appProps = React.useContext(AppContext); // Usar contexto para funções
+
+            // Extrai o Saldo Inicial para a gestão atual
+            const managementEntry = managementData.find(m => m.id === currentManagementId) || { id: currentManagementId, initial_balance: 0 };
+            const initialBalance = managementEntry.initial_balance;
+            
+            // 1. Cálculo Otimizado de Dados do Gráfico (Apenas usa as movimentações)
+            const chartDataCalculated = useMemo(() => {
+                if(isDataLoading) return { chartArray: [], maxAbsValue: 0 }; 
+                
+                const monthlyData = {};
+                
+                movimentacoes.allMovimentacoes.forEach(item => {
+                    const monthKey = `${item.parcelaAno}-${String(item.parcelaMes).padStart(2, '0')}`;
+                    if (!monthlyData[monthKey]) {
+                        monthlyData[monthKey] = { receitas: 0, despesas: 0, cumulativeBalance: 0, month: item.parcelaMes, year: item.parcelaAno };
+                    }
+                    
+                    if (item.estaPago) {
+                        if (item.tipo === 'recebimento') {
+                            monthlyData[monthKey].receitas += item.valor;
+                        } else {
+                            monthlyData[monthKey].despesas += item.valor;
+                        }
+                    }
+                });
+                
+                const chartArray = Object.values(monthlyData).sort((a, b) => {
+                    if (a.year !== b.year) return a.year - b.year;
+                    return a.month - b.month;
+                });
+                
+                // Aplica Saldo Inicial ao primeiro mês
+                let cumulativeBalance = initialBalance;
+                let maxAbsValue = Math.abs(initialBalance);
+
                 chartArray.forEach(data => {
                     data.saldo = data.receitas - data.despesas;
                     cumulativeBalance += data.saldo;
@@ -450,20 +804,10 @@
 
                 return { chartArray, maxAbsValue };
                 
-            }, [movimentacoes, isDataLoading]);
+            }, [movimentacoes, initialBalance, isDataLoading]);
             
             // 2. Tabela de Movimentações
             const tableItems = movimentacoes.allMovimentacoes.slice().reverse();
-
-            // Normalização para o gráfico
-            const maxChartHeight = 200;
-            const normalizedChartData = chartData.chartArray.map(data => ({
-                ...data,
-                normalizedHeight: chartData.maxAbsValue > 0 
-                    ? Math.abs(data.cumulativeBalance) / chartData.maxAbsValue * maxChartHeight 
-                    : 0,
-                isPositive: data.cumulativeBalance >= 0
-            }));
 
             if (isDataLoading) {
                 return (
@@ -474,141 +818,100 @@
                 );
             }
             
-            // Componente Tabela Detalhada
-            const TabelaDetalhada = () => {
-                // Obtenção da função toggleStatus de dentro do contexto App
-                const appProps = React.useContext(AppContext);
+            const TabelaDetalhada = () => (
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200"><h2 className="font-semibold text-gray-700">Histórico Completo</h2></div>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mês/Ano</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parcela</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {tableItems.length === 0 ? (
+                                    <tr><td colSpan="7" className="px-6 py-4 text-center text-gray-500">Nenhuma movimentação registrada.</td></tr>
+                                ) : (
+                                    tableItems.map((item) => {
+                                        const isReceita = item.tipo === 'recebimento';
+                                        const isPago = item.estaPago;
+                                        const statusText = isReceita ? (isPago ? 'Recebido' : 'A Receber') : (isPago ? 'Pago' : 'A Pagar');
+                                        const statusColor = isReceita ? (isPago ? 'text-green-600' : 'text-accent-yellow') : (isPago ? 'text-gray-500' : 'text-red-600');
+                                        const rowClass = isReceita ? 'hover:bg-green-50/50' : 'hover:bg-red-50/50';
 
-                return (
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200"><h2 className="font-semibold text-gray-700">Histórico Completo</h2></div>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mês/Ano</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parcela</th>
-                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
-                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {tableItems.length === 0 ? (
-                                        <tr><td colSpan="7" className="px-6 py-4 text-center text-gray-500">Nenhuma movimentação registrada.</td></tr>
-                                    ) : (
-                                        tableItems.map((item) => {
-                                            const isReceita = item.tipo === 'recebimento';
-                                            const isPago = item.estaPago;
-                                            const statusText = isReceita ? (isPago ? 'Recebido' : 'A Receber') : (isPago ? 'Pago' : 'A Pagar');
-                                            const statusColor = isReceita ? (isPago ? 'text-green-600' : 'text-accent-yellow') : (isPago ? 'text-gray-500' : 'text-red-600');
-                                            const rowClass = isReceita ? 'hover:bg-green-50/50' : 'hover:bg-red-50/50';
-
-                                            return (
-                                                <tr key={`${item.chaveStatus}-${item.id}`} className={rowClass}>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                                                        {item.dia}/{item.parcelaMes}/{item.parcelaAno}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isReceita ? 'bg-primary-dark/10 text-primary-dark' : 'bg-gray-100 text-gray-800'}`}>
-                                                            {isReceita ? 'RECEITA' : 'DESPESA'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{item.nome}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.parcelaAtual}/{item.parcelas}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right" style={{ color: isReceita ? '#10B981' : '#EF4444' }}>
-                                                        {isReceita ? '+' : '-'} R$ {Number(item.valor).toFixed(2)}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                                                        <span className={`font-medium ${statusColor}`}>{statusText}</span>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium flex gap-2 justify-center">
-                                                        <button 
-                                                            onClick={() => appProps.toggleStatus(item.chaveStatus, item.tipo)}
-                                                            title={`Marcar como ${isPago ? 'PENDENTE' : (isReceita ? 'RECEBIDO' : 'PAGO')}`}
-                                                            className={`text-gray-400 hover:text-primary-light`}>
-                                                            <Icon name={isPago ? "minus-circle" : "check-circle"} size={16}/>
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => appProps.excluirDivida(item.id, item.tipo)}
-                                                            title="Excluir Conta"
-                                                            className="btn-trash p-1 bg-red-100/70 hover:bg-red-200">
-                                                            <Icon name="trash-2" size={16} className="text-red-500 hover:text-red-700"/>
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
+                                        return (
+                                            <tr key={`${item.chaveStatus}-${item.id}`} className={rowClass}>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                                                    {item.dia}/{item.parcelaMes}/{item.parcelaAno}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isReceita ? 'bg-primary-dark/10 text-primary-dark' : 'bg-gray-100 text-gray-800'}`}>
+                                                        {isReceita ? 'RECEITA' : 'DESPESA'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{item.nome}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.parcelaAtual}/{item.parcelas}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right" style={{ color: isReceita ? '#10B981' : '#EF4444' }}>
+                                                    {isReceita ? '+' : '-'} R$ {Number(item.valor).toFixed(2)}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                                                    <span className={`font-medium ${statusColor}`}>{statusText}</span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium flex gap-2 justify-center">
+                                                    <button 
+                                                        onClick={() => appProps.toggleStatus(item.chaveStatus, item.tipo)}
+                                                        title={`Marcar como ${isPago ? 'PENDENTE' : (isReceita ? 'RECEBIDO' : 'PAGO')}`}
+                                                        className={`text-gray-400 hover:text-primary-light`}>
+                                                        <Icon name={isPago ? "minus-circle" : "check-circle"} size={16}/>
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => appProps.excluirDivida(item.id, item.tipo)}
+                                                        title="Excluir Conta"
+                                                        className="btn-trash p-1 bg-red-100/70 hover:bg-red-200">
+                                                        <Icon name="trash-2" size={16} className="text-red-500 hover:text-red-700"/>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
                     </div>
-                );
-            };
-            
-            // SetoresView agora é um placeholder
-            const SetoresView = () => (
-                 <div className="text-center py-10 text-gray-500">A funcionalidade de Análise (Tags/Setores) foi removida a pedido.</div>
+                </div>
             );
-
-
+            
             return (
                 <div className="space-y-6">
-                    {/* Saldo Atual (Caixa) */}
-                    <div className={`p-6 rounded-xl border shadow-lg transition-colors ${movimentacoes.totalRealizado >= 0 ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'}`}>
-                        <span className="text-xl font-medium uppercase text-gray-700">Caixa Atual (Saldo Realizado)</span>
-                        <div className="text-5xl font-extrabold mt-2" style={{ color: movimentacoes.totalRealizado >= 0 ? '#10B981' : '#EF4444' }}>
-                            R$ {movimentacoes.totalRealizado.toFixed(2)}
+                    {/* Edição do Saldo Inicial / Caixa Atual */}
+                    <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                        <div>
+                            <span className="text-sm font-medium uppercase text-gray-700">Saldo Inicial ({currentManagementId})</span>
+                            <div className="text-2xl font-bold text-gray-800 mt-1">R$ {initialBalance.toFixed(2)}</div>
+                            <p className="text-xs text-gray-500">Este é o ponto de partida do seu caixa para esta gestão.</p>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1">Soma de todas as Receitas Recebidas menos todas as Despesas Pagas até hoje.</p>
+                        <button 
+                            onClick={() => appProps.setIsEditCashModalOpen(true)}
+                            className="bg-accent-yellow/20 text-primary-dark px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-accent-yellow/40 transition-colors">
+                            <Icon name="pencil" size={16}/> Editar Caixa
+                        </button>
                     </div>
+                    
 
-                    {/* Gráfico de Saldo Acumulado */}
+                    {/* Gráfico de Linhas (Chart.js) */}
                     <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                        <h2 className="font-semibold text-gray-700 text-lg mb-4">Gráfico de Saldo Acumulado (Últimos Meses)</h2>
-                        <div className="flex justify-start items-end gap-2 p-2 overflow-x-auto min-h-[250px] relative">
-                            
-                            {/* Linha de Zero */}
-                            <div className="absolute left-0 right-0 border-t border-gray-300 pointer-events-none" style={{ top: `${maxChartHeight / 2}px` }}></div>
-                            <span className="absolute left-0 text-xs text-gray-500" style={{ top: `${maxChartHeight / 2 - 10}px` }}>R$ 0</span>
-
-                            {normalizedChartData.length === 0 ? (
-                                <div className="text-center py-10 w-full text-gray-400">Nenhum dado realizado para o gráfico.</div>
-                            ) : (
-                                normalizedChartData.map((data, index) => (
-                                    <div key={index} className="flex flex-col items-center w-12 flex-shrink-0">
-                                        <div className="relative w-full flex flex-col items-center">
-                                            {/* Espaço abaixo da linha zero (negativo) ou acima (positivo) */}
-                                            <div className={`w-full ${data.isPositive ? 'order-2' : 'order-1'} bg-gray-100`} style={{ height: `${data.isPositive ? maxChartHeight / 2 : maxChartHeight - data.normalizedHeight - (maxChartHeight / 2)}px` }}></div>
-                                            
-                                            {/* Barra Real */}
-                                            <div 
-                                                className={`chart-bar w-full rounded-t-md cursor-pointer group relative hover:opacity-80 ${data.isPositive ? 'bg-green-500 order-1' : 'bg-red-500 order-2'}`} 
-                                                style={{ height: `${data.normalizedHeight / 2}px` }}
-                                                title={`Mês: ${getMonthName(data.month)}/${data.year}\nSaldo Acumulado: R$ ${data.cumulativeBalance.toFixed(2)}`}>
-                                                
-                                                {/* Tooltip */}
-                                                <span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 p-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                                                    R$ {data.cumulativeBalance.toFixed(2)}
-                                                </span>
-                                            </div>
-
-                                            {/* Espaço acima da linha zero (positivo) ou abaixo (negativo) */}
-                                            <div className={`w-full ${data.isPositive ? 'order-1' : 'order-2'} bg-gray-100`} style={{ height: `${data.isPositive ? maxChartHeight - data.normalizedHeight - (maxChartHeight / 2) : maxChartHeight / 2}px` }}></div>
-                                        </div>
-                                        
-                                        <span className="text-[10px] text-gray-600 mt-1">{getMonthName(data.month)}/{String(data.year).slice(2)}</span>
-                                    </div>
-                                ))
-                            )}
-                        </div>
+                        <h2 className="font-semibold text-gray-700 text-lg mb-4">Tendência: Receitas vs. Despesas (Gestão {currentManagementId})</h2>
+                        <MonthlyChart chartData={chartDataCalculated.chartArray} />
                     </div>
 
 
-                    {/* Nav Tabs dentro de Planilha (APENAS UM BOTÃO) */}
+                    {/* Nav Tabs dentro de Planilha (Única Aba) */}
                     <div className="flex bg-gray-100 p-1 rounded-xl">
                         <button 
                             onClick={() => setInnerView('tabela')}
@@ -619,7 +922,7 @@
 
                     {/* Conteúdo da Aba */}
                     {innerView === 'tabela' && <TabelaDetalhada />}
-
+                    
                 </div>
             );
         };
@@ -639,21 +942,29 @@
             const [pagamentos, setPagamentos] = useState({});
             const [recebimentoStatus, setRecebimentoStatus] = useState({}); 
             
+            // --- NOVO: Estado de Gerenciamento de Guias ---
+            const initialMgmtId = localStorage.getItem('current_mgmt_id') || '2025.2';
+            const [currentManagementId, setCurrentManagementId] = useState(initialMgmtId);
+            const [managementData, setManagementData] = useState([]); // Saldo Inicial por período
+            
             // viewDate é um estado React
             const [viewDate, setViewDate] = useState(new Date()); 
             
             const [showModal, setShowModal] = useState(false);
             const [view, setView] = useState('calendario'); 
             
-            // NOVOS ESTADOS DE EXCLUSÃO (Reintroduzidos)
             const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
             const [itemToDelete, setItemToDelete] = useState(null); 
-            // NOVO ESTADO: Modal de Pagamento
             const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
             const [itemToPay, setItemToPay] = useState(null);
+            const [isEditCashModalOpen, setIsEditCashModalOpen] = useState(false);
 
 
-            // NOVO ESTADO INICIAL PARA DATA DE PAGAMENTO E COMPROVANTE (Movidos para o PaymentModal)
+            // Metas State (NOVO)
+            const [goals, setGoals] = useState([]);
+            const GOALS_DOC_REF = db.collection("goals").doc("master_goals");
+
+
             const [newConta, setNewConta] = useState({
                 nome: '', valor: '', dia: '', parcelas: '1',
                 mesInicio: new Date().getMonth() + 1,
@@ -664,6 +975,14 @@
             // 1. Definição Global e Estática da Referência do Firestore
             const USER_DOC_REF = user 
                 ? db.collection("shared_finances").doc(GLOBAL_DATA_ID) 
+                : null;
+            
+            // Referência à coleção de Gestão
+            const MGMT_COLLECTION_REF = db.collection(MANAGEMENT_COLLECTION);
+            
+            // Referência ao Documento da Gestão Atual
+            const CURRENT_MGMT_DOC_REF = user 
+                ? db.collection(MANAGEMENT_COLLECTION).doc(currentManagementId) 
                 : null;
 
 
@@ -676,9 +995,8 @@
                 return () => unsubscribeAuth();
             }, []);
 
-            // 🚀 EFEITO 2: Listener do Firestore (Carrega os dados)
+            // 🚀 EFEITO 2A: Listener de Dados Principais (Transações)
             useEffect(() => {
-                // Apenas executa se o usuário estiver autenticado
                 if (!user || !USER_DOC_REF) {
                     setDividas([]);
                     setRecebimentos([]);
@@ -699,8 +1017,7 @@
                         setPagamentos(data.pagamentos || {});
                         setRecebimentoStatus(data.recebimentoStatus || {});
                     } else {
-                        // Se o documento não existir, ele é criado com dados iniciais vazios
-                        saveDataToFirebase(USER_DOC_REF, [], [], {}, {});
+                        saveDataToFirebase(USER_DOC_REF, { dividas: [], recebimentos: [], pagamentos: {}, recebimentoStatus: {} });
                     }
                     setIsDataLoading(false); 
                 }, (error) => {
@@ -711,8 +1028,65 @@
                 return () => unsubscribeData();
             }, [user]); 
             
+            // 🚀 EFEITO 2B: Listener de Gestão (Saldo Inicial e Metas)
+            useEffect(() => {
+                if (!user || !MGMT_COLLECTION_REF) {
+                    setManagementData([]);
+                    return;
+                }
+                
+                // Ouve toda a coleção de gestão para obter todos os saldos iniciais
+                const unsubscribeMgmt = MGMT_COLLECTION_REF.onSnapshot(snapshot => {
+                    const data = [];
+                    snapshot.forEach(doc => {
+                        data.push({ id: doc.id, initial_balance: doc.data().initial_balance || 0, lastUpdated: doc.data().lastUpdated || null });
+                    });
+                    setManagementData(data);
+                }, (error) => {
+                    console.error("Erro ao carregar dados de Gestão:", error);
+                });
+
+                // Ouve as metas
+                const unsubscribeGoals = GOALS_DOC_REF.onSnapshot(doc => {
+                    if (doc.exists) {
+                        setGoals(doc.data().items || []);
+                    }
+                }, (error) => {
+                    console.error("Erro ao carregar Metas:", error);
+                });
+                
+                return () => {
+                    unsubscribeMgmt();
+                    unsubscribeGoals();
+                }
+
+            }, [user]);
+
+
             // --- Lógica de Negócios (Movimentações e Saldo) ---
             
+            const handleManagementChange = useCallback((id) => {
+                setCurrentManagementId(id);
+                localStorage.setItem('current_mgmt_id', id);
+            }, []);
+
+            const saveManagement = useCallback((ref, balance, id) => {
+                if (!ref) return;
+                
+                const data = {
+                    initial_balance: balance,
+                    lastUpdated: new Date().toISOString()
+                };
+                
+                ref.set(data, { merge: true }).then(() => {
+                    console.log(`Saldo Inicial para ${id} salvo com sucesso!`);
+                }).catch(e => {
+                    console.error("Falha ao salvar saldo inicial:", e);
+                });
+
+            }, []);
+
+
             const changeMonth = useCallback((offset) => {
                 const newDate = new Date(viewDate);
                 newDate.setMonth(newDate.getMonth() + offset);
@@ -725,7 +1099,13 @@
                 
                 if (item && !pagamentos[chave] && !recebimentoStatus[chave]) {
                     // Item NÃO está pago/recebido: abre o modal de pagamento
-                    setItemToPay({ ...item, chaveStatus: chave, tipo, parcelaAtual: getMonthDifference(item.mesInicio, item.anoInicio, viewDate.getMonth() + 1, viewDate.getFullYear()) + 1 });
+                    setItemToPay({ 
+                        ...item, 
+                        chaveStatus: chave, 
+                        tipo, 
+                        parcelaAtual: getMonthDifference(item.mesInicio, item.anoInicio, viewDate.getMonth() + 1, viewDate.getFullYear()) + 1,
+                        parcelas: item.parcelas
+                    });
                     setIsPaymentModalOpen(true);
                 } else {
                     // Item JÁ está pago/recebido: desmarca instantaneamente
@@ -742,7 +1122,7 @@
                         const novo = { ...prev };
                         if (novo[chave]) delete novo[chave];
                         else novo[chave] = true;
-                        saveDataToFirebase(USER_DOC_REF, dividas, recebimentos, novo, recebimentoStatus); 
+                        saveDataToFirebase(USER_DOC_REF, { dividas, recebimentos, pagamentos: novo, recebimentoStatus }); 
                         return novo;
                     });
                 } else if (tipo === 'recebimento') {
@@ -750,7 +1130,7 @@
                         const novo = { ...prev };
                         if (novo[chave]) delete novo[chave];
                         else novo[chave] = true;
-                        saveDataToFirebase(USER_DOC_REF, dividas, recebimentos, pagamentos, novo); 
+                        saveDataToFirebase(USER_DOC_REF, { dividas, recebimentos, pagamentos, recebimentoStatus: novo }); 
                         return novo;
                     });
                 }
@@ -762,18 +1142,13 @@
 
                 const { id, tipo } = itemToDelete;
                 
-                let newDividas = dividas;
-                let newRecebimentos = recebimentos;
+                let newDividas = dividas.filter(d => d.id !== id);
+                let newRecebimentos = recebimentos.filter(r => r.id !== id);
                 
-                if (tipo === 'divida') {
-                    newDividas = dividas.filter(d => d.id !== id);
-                    setDividas(newDividas);
-                } else {
-                    newRecebimentos = recebimentos.filter(r => r.id !== id);
-                    setRecebimentos(newRecebimentos);
-                }
+                setDividas(newDividas);
+                setRecebimentos(newRecebimentos);
                 
-                saveDataToFirebase(USER_DOC_REF, newDividas, newRecebimentos, pagamentos, recebimentoStatus);
+                saveDataToFirebase(USER_DOC_REF, { dividas: newDividas, recebimentos: newRecebimentos, pagamentos, recebimentoStatus });
                 
                 // Fechar modal após a ação
                 setIsConfirmModalOpen(false);
@@ -784,7 +1159,6 @@
 
             // NOVO: Função que abre o modal de confirmação (chamada pelo botão LIXEIRA)
             const excluirDivida = useCallback((id, tipo) => {
-                // Montar um objeto temporário para o modal
                 const item = [...dividas, ...recebimentos].find(i => i.id === id) || { id, tipo, nome: 'Item Desconhecido', valor: 0 };
                 setItemToDelete({ ...item, tipo });
                 setIsConfirmModalOpen(true);
@@ -804,7 +1178,6 @@
                     parcelas: parseInt(newConta.parcelas),
                     mesInicio: parseInt(newConta.mesInicio),
                     anoInicio: parseInt(newConta.anoInicio),
-                    // Campos de pagamento removidos do cadastro inicial
                 };
                 
                 let newDividas = dividas;
@@ -818,7 +1191,7 @@
                 
                 setDividas(newDividas);
                 setRecebimentos(newRecebimentos);
-                saveDataToFirebase(USER_DOC_REF, newDividas, newRecebimentos, pagamentos, recebimentoStatus); 
+                saveDataToFirebase(USER_DOC_REF, { dividas: newDividas, recebimentos: newRecebimentos, pagamentos, recebimentoStatus }); 
 
                 setShowModal(false);
                 setNewConta({ 
@@ -829,7 +1202,12 @@
             }, [dividas, recebimentos, pagamentos, recebimentoStatus, newConta, USER_DOC_REF]);
             
             // --- CÓDIGOS DE CÁLCULO (Otimizado) ---
-            // (As funções movimentacoesDoMes e lifetimeMovimentacoes permanecem as mesmas)
+            
+            const getBalanceForManagement = useCallback(() => {
+                const mgmt = managementData.find(m => m.id === currentManagementId);
+                return mgmt ? mgmt.initial_balance : 0;
+            }, [managementData, currentManagementId]);
+
 
             const movimentacoesDoMes = useMemo(() => {
                 if (isDataLoading) return { itens: [], totalDespesasPagas: 0, totalDespesasPendentes: 0, totalReceitasPagas: 0, totalReceitasPendentes: 0, saldo: 0 };
@@ -873,13 +1251,14 @@
 
 
             const lifetimeMovimentacoes = useMemo(() => {
-                if (isDataLoading) return { totalRealizado: 0, allMovimentacoes: [] };
+                if (isDataLoading) return { totalRealizado: 0, allMovimentacoes: [], totalProfit: 0 };
                 
                 const today = new Date();
                 const currentMonth = today.getMonth() + 1;
                 const currentYear = today.getFullYear();
                 
-                let totalRealizado = 0;
+                let totalRealizado = getBalanceForManagement(); // Inclui o Saldo Inicial
+                let totalProfit = 0;
                 const allMovimentacoes = [];
 
                 const processMovimentos = (items, statusMap, type) => {
@@ -895,7 +1274,9 @@
                             const isDue = getMonthDifference(parcelMonth, parcelYear, currentMonth, currentYear) >= 0;
 
                             if (isDue && isStatusSet) {
-                                totalRealizado += (type === 'recebimento' ? item.valor : -item.valor);
+                                const value = (type === 'recebimento' ? item.valor : -item.valor);
+                                totalRealizado += value;
+                                totalProfit += value;
                             }
                             
                             allMovimentacoes.push({
@@ -910,15 +1291,28 @@
                 processMovimentos(dividas, pagamentos, 'divida');
                 processMovimentos(recebimentos, recebimentoStatus, 'recebimento');
 
-                allMovimentacoes.sort((a, b) => {
+                // Filtra Movimentações para a Gestão Atual (apenas para o relatório visual)
+                const mgmtEntry = managementData.find(m => m.id === currentManagementId) || { id: 'default', initial_balance: 0 };
+                const [startYearStr, startId] = mgmtEntry.id.split('.');
+                const startYear = parseInt(startYearStr || new Date().getFullYear());
+                const currentStartMonth = 1; 
+
+                const filteredMovimentacoes = allMovimentacoes.filter(item => {
+                    if (item.parcelaAno > startYear) return true;
+                    if (item.parcelaAno < startYear) return false;
+                    return item.parcelaMes >= currentStartMonth;
+                });
+
+
+                filteredMovimentacoes.sort((a, b) => {
                     if (a.parcelaAno !== b.parcelaAno) return a.parcelaAno - b.parcelaAno;
                     if (a.parcelaMes !== b.parcelaMes) return a.parcelaMes - b.parcelaMes;
                     return a.dia - b.dia;
                 });
 
-                return { totalRealizado, allMovimentacoes };
+                return { totalRealizado, allMovimentacoes: filteredMovimentacoes, totalProfit };
 
-            }, [dividas, recebimentos, pagamentos, recebimentoStatus, isDataLoading]);
+            }, [dividas, recebimentos, pagamentos, recebimentoStatus, isDataLoading, currentManagementId, managementData]);
 
 
             const { itens, totalDespesasPagas, totalDespesasPendentes, totalReceitasPagas, totalReceitasPendentes, saldo } = movimentacoesDoMes;
@@ -1092,6 +1486,10 @@
 
 
             // --- Renderização Principal (Navbar e Roteamento) ---
+            const currentMgmt = managementData.find(m => m.id === currentManagementId);
+            const initialBalance = currentMgmt ? currentMgmt.initial_balance : 0;
+            const currentMgmtRef = db.collection(MANAGEMENT_COLLECTION).doc(currentManagementId);
+
             return (
                 <div className="min-h-screen pb-20">
                     {/* Navbar */}
@@ -1100,18 +1498,14 @@
                             
                             {/* 🎨 Logo e Nome */}
                             <div className="flex items-center gap-2">
-                                {/* REMOVENDO O FUNDO AZUL (p-2 rounded-lg bg-primary-dark shadow-md) */}
                                 <div className="p-2 rounded-lg"> 
-                                    {/* LOGO MENOR NA NAVBAR (utiliza o caminho externo) */}
                                     <img 
                                         src={LOGO_URL} 
                                         alt="Logo Commit JR" 
                                         className="w-6 h-6 object-contain"
                                         onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/24x24/0B375B/FFFFFF?text=JR"; }}
                                     />
-                                    {/* FIM LOGO */}
                                 </div>
-                                {/* TÍTULO CORRIGIDO: Removida a palavra 'Sistema' */}
                                 <h1 className="font-bold text-xl tracking-tight text-white">Financeiro <span className="text-accent-yellow">Commit JR</span></h1>
                             </div>
 
@@ -1129,12 +1523,35 @@
                                     <Icon name="layout-list" size={16} className={view === 'planilha' ? 'text-white' : 'text-primary-dark'}/> 
                                     <span className="hidden sm:inline">Planilha</span>
                                 </button>
+                                <button 
+                                    onClick={() => setView('metas')} 
+                                    className={`btn-nav p-2 rounded-full text-sm font-semibold flex items-center gap-1 ${view === 'metas' ? 'bg-primary-dark text-white shadow-md' : 'bg-white text-primary-dark hover:bg-gray-100'}`}>
+                                    <Icon name="target" size={16} className={view === 'metas' ? 'text-white' : 'text-primary-dark'}/> 
+                                    <span className="hidden sm:inline">Metas</span>
+                                </button>
                             </div>
                             
                             {/* 🗓 Botões de Ação Específicos da View */}
                             <div className="flex items-center gap-4">
                                 
-                                {/* O CAMPO DE GRUPO FOI REMOVIDO DA INTERFACE */}
+                                {/* NOVO: Seletor de Gestão (Guia) */}
+                                <select
+                                    value={currentManagementId}
+                                    onChange={(e) => handleManagementChange(e.target.value)}
+                                    className="bg-primary-dark/50 text-white rounded-full text-sm py-1.5 px-3 border border-primary-dark focus:outline-none hidden md:block"
+                                >
+                                    {managementData.map(mgmt => (
+                                        <option key={mgmt.id} value={mgmt.id}>
+                                            {mgmt.id}
+                                        </option>
+                                    ))}
+                                    {/* Exemplo de Períodos Físicos */}
+                                    <option value="2025.2">2025.2</option>
+                                    <option value="2026.1">2026.1</option>
+                                    <option value="2026.2">2026.2</option>
+                                    <option value="2027.1">2027.1</option>
+                                </select>
+
 
                                 {view === 'calendario' ? (
                                     <div className="flex items-center gap-4 bg-primary-dark/50 rounded-full p-1 pr-4 hidden md:flex">
@@ -1164,18 +1581,25 @@
                     </nav>
 
                     {/* Conteúdo Renderizado com Base no Estado 'view' */}
-                    <AppContext.Provider value={{ toggleStatus, excluirDivida }}>
+                    <AppContext.Provider value={{ toggleStatus: handleToggleStatusClick, excluirDivida: excluirDivida, setIsEditCashModalOpen: setIsEditCashModalOpen }}>
                         {view === 'calendario' && <CalendarioView />}
+                        
                         {view === 'planilha' && (
                             <main className="max-w-5xl mx-auto px-4 py-6">
                                 <PlanilhaView 
                                     movimentacoes={lifetimeMovimentacoes} 
                                     excluirDivida={excluirDivida} 
-                                    toggleStatus={handleToggleStatusClick} // Mudança: Usar handleToggleStatusClick
+                                    toggleStatus={handleToggleStatusClick} 
                                     isDataLoading={isDataLoading}
+                                    managementData={managementData}
+                                    currentManagementId={currentManagementId}
+                                    saveManagement={saveManagement}
                                 />
                             </main>
                         )}
+
+                        {view === 'metas' && <GoalsView goals={goals} lifetimeMovimentacoes={lifetimeMovimentacoes} initialBalance={initialBalance} />}
+
                     </AppContext.Provider>
 
                     {/* Modal (Adicionar Conta) */}
@@ -1235,6 +1659,16 @@
                         onClose={() => setIsPaymentModalOpen(false)}
                         item={itemToPay}
                         toggleStatus={toggleStatus}
+                    />
+
+                    {/* Modal para Edição do Saldo Inicial */}
+                    <EditInitialCashModal
+                        isOpen={isEditCashModalOpen}
+                        onClose={() => setIsEditCashModalOpen(false)}
+                        initialBalance={initialBalance}
+                        managementId={currentManagementId}
+                        saveManagement={saveManagement}
+                        mgmtRef={CURRENT_MGMT_DOC_REF}
                     />
 
                 </div>
